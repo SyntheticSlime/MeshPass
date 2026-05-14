@@ -1,6 +1,7 @@
 # MeshPass
 
 import socket
+import struct
 import threading
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import dh
@@ -8,8 +9,9 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.fernet import Fernet
 
 # Define the UDP IP address and port to listen on
-MULTICAST_UDP_IP = '224.0.0.71'
+MULTICAST_UDP_IP = '224.0.0.86'
 MULTICAST_UDP_PORT = 5005
+MULTICAST_TUPLE = (MULTICAST_UDP_IP, MULTICAST_UDP_PORT)
 
 print(f'Listening for UDP packets on {MULTICAST_UDP_IP}:{MULTICAST_UDP_PORT}')
 
@@ -35,8 +37,19 @@ PARAMETERS_RESPONSE = '!PARAMETERS_RESPONSE'
 def main(cli_args):
 
     # Create a UDP socket
-    multicast_udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    multicast_udp_sock.bind((MULTICAST_UDP_IP, MULTICAST_UDP_PORT))
+    multicast_udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    multicast_udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) #This line has something to do with timeouts and avoiding errors due to timeouts.
+    
+    multicast_udp_sock.bind(("", MULTICAST_UDP_PORT))
+    
+    mreq = struct.pack("4s4s",
+                       socket.inet_aton(MULTICAST_UDP_IP),
+                       socket.inet_aton("0.0.0.0"))  # see note
+    multicast_udp_sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+
+    #multicast_udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #multicast_udp_sock.bind(MULTICAST_TUPLE)
     my_udp_socket_obj = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     #set up TCP server socket to listen for sync requests
@@ -67,13 +80,18 @@ def listen_for_multicasts(multicast_udp_sock):
     while True:
         # Receive data from the socket
         data, partner_socket_tuple = multicast_udp_sock.recvfrom(1024)
-        print(f'Received packet from {partner_socket_tuple}: {data.decode('utf-8')}')    
+        message = data.decode('utf-8')
+        if message == MY_IP_ADDRESS:
+            print(f'{partner_socket_tuple}: This is me.')
+            return
+        print(f'Received packet from {partner_socket_tuple}: {message}')    
+        print(f'{MY_IP_ADDRESS}')
         #respond by setting up TCP connection.
         my_socket_obj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         my_socket_obj.connect(partner_socket_tuple)
 
 def send_multicast(my_udp_socket_obj):
-    message = 'hello'
+    message = f'{MY_IP_ADDRESS}'
     try:
         print(f'{MULTICAST_UDP_IP}, {MULTICAST_UDP_PORT}, {message}')
         my_udp_socket_obj.sendto(message.encode(),
