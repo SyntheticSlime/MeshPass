@@ -12,7 +12,7 @@ from cryptography.fernet import Fernet
 MULTICAST_UDP_IP = '224.0.0.86'
 MULTICAST_UDP_PORT = 5005
 MULTICAST_TUPLE = (MULTICAST_UDP_IP, MULTICAST_UDP_PORT)
-MULTICAST_TTL = 4
+MULTICAST_TTL = 1
 
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
