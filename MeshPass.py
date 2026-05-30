@@ -15,16 +15,10 @@ MULTICAST_TUPLE = (MULTICAST_UDP_IP, MULTICAST_UDP_PORT)
 MULTICAST_TTL = 1
 
 
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.connect(("8.8.8.8", 80))
-MY_IP_ADDRESS = s.getsockname()[0]
-s.close()
 HEADER_LEN = 64
-#SERVER_TCP_PORT = 5050
 FORMAT = 'utf-8'
 MYHOSTNAME = socket.gethostname()
-#MY_IP_ADDRESS = socket.gethostbyname(MYHOSTNAME)
-#MY_OTHER_IP_ADDRESS = socket.gethostbyaddr(MYHOSTNAME)
+MY_IP_ADDRESS = socket.gethostbyname(MYHOSTNAME)
 MY_TCP_PORT = 5051
 
 MY_SOCKET_TUPLE = (MY_IP_ADDRESS, MY_TCP_PORT)
