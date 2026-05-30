@@ -1,0 +1,7 @@
+Inheritance of File Descriptors
+
+Added in version 3.4.
+
+A file descriptor has an “inheritable” flag which indicates if the file descriptor can be inherited by child processes. Since Python 3.4, file descriptors created by Python are non-inheritable by default.
+
+On Windows, non-inheritable handles and file descriptors are closed in child processes, except for standard streams (file descriptors 0, 1 and 2: stdin, stdout and stderr), which are always inherited. Using spawn* functions, all inheritable handles and all inheritable file descriptors are inherited. Using the subprocess module, all file descriptors except standard streams are closed, and inheritable handles are only inherited if the close_fds parameter is False.
