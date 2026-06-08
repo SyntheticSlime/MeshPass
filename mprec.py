@@ -84,6 +84,9 @@ class MPrec:
     def _getFieldValue(self, label):  # only for use by MPrec methods
         return self.fields[label].value
         
+    def _setFieldModTime(self, label, timeValue):
+        self._getField(label)._setModTime(timeValue)
+        
     def _setField(self, label, field):
         self.fields[label] = field
             
@@ -124,7 +127,9 @@ class MPrec:
     def changeFieldValue(self, label, value):
         self._updateRecVersion()
         self._setFieldValue(label, value)
-        self._setRecModTime(self._getField(label)._getModTime())
+        now = _timeStamp()
+        self._setFieldModTime(label, now)
+        self._setRecModTime(now)
         
     def changeFieldLabel(self, oldLabel, newLabel):
         if newLabel in self.fields:
