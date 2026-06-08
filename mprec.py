@@ -36,6 +36,9 @@ def _genRecID(db):
         id = random.randrange(_maxRandom)
     _add_id_to_db(id)
     return id
+    
+def time2str(timeValue):
+    return time.ctime(timeValue)
    
 
 # = = = = =   C L A S S E S   = = = = =
@@ -121,7 +124,7 @@ class MPrec:
         self.id = _genRecID(_db)
         self._initFields()
         self.addField(self.titleLabel, title)
-        self.createTime = self._getField(self.titleLabel)._getModTime
+        self.createTime = self._getField(self.titleLabel)._getModTime()
         self._setRecModTime(self.createTime)
         
     def changeFieldValue(self, label, value):
@@ -135,9 +138,8 @@ class MPrec:
         if newLabel in self.fields:
             raise Exception(f'Record already has a field labeled {newLabel}')
         else:
-            self.updateRecVersion()
-            self.addField(newLabel, self._getField(oldLabel))
-            self._getField(label)._setModTime(_timeStamp())
+            self._updateRecVersion()
+            self.addField(newLabel, self._getFieldValue(oldLabel))
             self._delField(oldLabel)
             
             
@@ -146,20 +148,42 @@ class MPrec:
 def testCode(args):
     ron = MPrec('Ron')
     print(f'RecID = {ron.id}')
+    print(f'recCreateTime = {time2str(ron.createTime)}')
+    print()
+    
+    print(f'Rec modTime {time2str(ron.getRecModTime())}')
     for label in ron.fields:
-        print(label, ron.fields[label].value)
+        print(label, ron._getFieldValue(label), time.ctime(ron._getField(label).modTime))
+
+    time.sleep(1)
     print()
     ron.addField('IP address', '1.2.3.4')
+    print(f'Rec modTime {time2str(ron.getRecModTime())}')
     for label in ron.fields:
-        print(label, ron.fields[label].value)
+        print(label, ron._getFieldValue(label), time.ctime(ron._getField(label).modTime))
+        
+    time.sleep(1)
     print()
     ron.addField('password', '1234')
+    print(f'Rec modTime {time.ctime(ron.getRecModTime())}')
     for label in ron.fields:
-        print(label, ron.fields[label].value)
+        print(label, ron._getFieldValue(label), time.ctime(ron._getField(label).modTime))
+        
+    time.sleep(1)
     print()
     ron.changeFieldValue('password', '5678')
+    print(f'Rec modTime {time.ctime(ron.getRecModTime())}')
     for label in ron.fields:
-        print(label, ron.fields[label].value)
+        print(label, ron._getFieldValue(label), time.ctime(ron._getField(label).modTime))
+        
+    time.sleep(1)
+    print()
+    ron.changeFieldLabel('password', 'pswd')
+    print(f'Rec modTime {time.ctime(ron.getRecModTime())}')
+    for label in ron.fields:
+        value = ron._getFieldValue(label)
+        print(label, '*defunct field*' if value is None else value, time.ctime(ron._getField(label).modTime))
+        
     print()
     print('IDs in DB:')
     for id in _db:
