@@ -54,7 +54,7 @@ def main(cli_args):
                                                     socket.IPPROTO_UDP)
     # REUSEPORT helps when restarting app & OS thinks socket is still open.
     multicast_listen_udp_socket_obj.setsockopt(socket.SOL_SOCKET,
-                                               socket.SO_REUSEPORT, 1)
+                                               socket.SO_REUSEADDR, 1)
     
     # IP_ADD_MEMBERSHIP supposedly needed to receive multicasts.
     # Possibly, this function really enables IGMP report messages.
