@@ -66,7 +66,7 @@ def main(cli_args):
                                                socket.IP_ADD_MEMBERSHIP,
                                                mreq)
 
-    multicast_listen_udp_socket_obj.bind(MULTICAST_TUPLE)
+    #multicast_listen_udp_socket_obj.bind(MULTICAST_TUPLE)
 
     unicast_socket_obj = socket.socket(socket.AF_INET,
                                        socket.SOCK_DGRAM,
