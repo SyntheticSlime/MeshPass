@@ -108,8 +108,8 @@ def main(cli_args):
                                  )
     thread_tcp.start()
 
-    print(f'MeshPass> ', end='')
     while True:
+        print(f'MeshPass> ', end='')
         command = input().upper()
         if command == 'FIND':
             send_multicast(unicast_socket_obj)
