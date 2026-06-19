@@ -37,7 +37,7 @@ MY_IP_ADDRESS = None
 if SYSTEM == LINUX:
     data = subprocess.run(['ip', 'addr'], capture_output=True).stdout.decode(FORMAT)
     print(f'{type(data)}')
-    pat = r"192\.\d+\.\d+\.\d+"
+    pat = r"(192|172|10)\.\d+\.\d+\.\d+"
     MY_IP_ADDRESS = re.search(pat, data).group(0)
 else:
     MY_IP_ADDRESS = socket.gethostbyname(MYHOSTNAME)
@@ -80,8 +80,8 @@ def main(cli_args):
     if SYSTEM == LINUX:
         multicast_listen_udp_socket_obj.bind(MULTICAST_TUPLE)
     else:
-        multicast_listen_udp_socket_obj.bind(('', MULTICAST_UDP_PORT)
-            
+        multicast_listen_udp_socket_obj.bind(('', MULTICAST_UDP_PORT))
+
     multicast_listen_udp_socket_obj.setsockopt(socket.IPPROTO_IP,
                                                socket.IP_ADD_MEMBERSHIP,
                                                mreq)
