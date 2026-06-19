@@ -10,6 +10,10 @@ It also allows one-way syncing of selected records with other users.
 import socket
 import struct
 import threading
+import platform
+import re
+import subprocess
+
 from cryptography.hazmat.primitives            import hashes
 from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf   import HKDF
@@ -24,9 +28,20 @@ RCV_BFR_SZ          = 1024
 
 
 HEADER_LEN    = 64
+LINUX         = 'Linux'
+WINDOWS       = 'Windows'
+SYSTEM        = platform.system()
 FORMAT        = 'utf-8'
 MYHOSTNAME    = socket.gethostname()
-MY_IP_ADDRESS = socket.gethostbyname(MYHOSTNAME)
+MY_IP_ADDRESS = None
+if SYSTEM == LINUX:
+    data = subprocess.run(['ip', 'addr'], capture_output=True).stdout.decode(FORMAT)
+    print(f'{type(data)}')
+    pat = r"192\.\d+\.\d+\.\d+"
+    MY_IP_ADDRESS = re.search(pat, data).group(0)
+else:
+    MY_IP_ADDRESS = socket.gethostbyname(MYHOSTNAME)
+print(f'MY_IP_ADDRESS: {MY_IP_ADDRESS}')
 MY_TCP_PORT   = 5051
 UNICAST_UDP_PORT = 5052
 UNICAST_TUPLE = (MY_IP_ADDRESS, UNICAST_UDP_PORT)
@@ -62,11 +77,16 @@ def main(cli_args):
     mreq = struct.pack('4sl',
                        socket.inet_aton(MULTICAST_UDP_IP),
                        socket.INADDR_ANY)
+    if SYSTEM == LINUX:
+        multicast_listen_udp_socket_obj.bind(MULTICAST_TUPLE)
+    else:
+        multicast_listen_udp_socket_obj.bind(('', MULTICAST_UDP_PORT)
+            
     multicast_listen_udp_socket_obj.setsockopt(socket.IPPROTO_IP,
                                                socket.IP_ADD_MEMBERSHIP,
                                                mreq)
 
-    multicast_listen_udp_socket_obj.bind(('', 0))
+    
 
     unicast_socket_obj = socket.socket(socket.AF_INET,
                                        socket.SOCK_DGRAM,
