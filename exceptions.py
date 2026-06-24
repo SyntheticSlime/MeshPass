@@ -4,28 +4,17 @@
 import sys  # exit()
 
 class _MPException (Exception):
-  def __init__(self, message=''):
-# def __init__(self, errno, message):
-#   self.errno = errno
-    self.message = message
-    self.args = (message,)
-#   self.args = (errno, message)
-    return
+    def __init__(self, message=''):
+        if len(message) > 0:
+            sys.exit(message)
+        return
 
 class ProgrammerError (_MPException):
-  def __init__ (self, message=''):
-    super().__init__(message)  # for ancestor class
-    if len(message) == 0:
-      sys.exit('Programming error - program terminating.')
-    else:
-      sys.exit(message)
-    return
+    def __init__ (self, message=''):
+        super().__init__(message)  # for ancestor class
+        sys.exit('Programming error - program terminating.')
 
 class UserError (_MPException):
-  def __init__ (self, message=''):
-    super().__init__(message)  # for ancestor class
-    if len(message) == 0:
-      sys.exit('User error not handled by program - program terminating.')
-    else:
-      sys.exit(message)
-    return
+    def __init__ (self, message=''):
+        super().__init__(message)  # for ancestor class
+        sys.exit('User error not handled by program - program terminating.')
