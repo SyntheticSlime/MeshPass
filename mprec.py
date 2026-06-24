@@ -12,7 +12,7 @@
 
 import random    # randrange()
 import sys       # exit(), argv[]
-import time      # time(), ctime()
+import time      # time(), ctime(), sleep()
 import warnings  # warn()
 from inspect import getframeinfo, currentframe  # used in _getFieldPosArg
 
@@ -88,7 +88,7 @@ class Field:
         if setmodtime:
             self._setModTime(_timeStamp())
 
-    def getValue(self) -> str:
+    def _getValue(self) -> str:
         '''Get the value attribute's value and return it.
         '''
 
@@ -166,7 +166,7 @@ class Field:
         '''Format the Field instance as a string for developers.
         '''
 
-        return (f'{self.getValue()} - modified {time2str(self._getModTime())}'
+        return (f'{self._getValue()} - modified {time2str(self._getModTime())}'
                 f' - Masked = {self._getMask()}')
 
 class _RecIter:
@@ -282,16 +282,16 @@ class MPrec:
 
     def _initDeletedFields(self):
         '''Keep a separate list of deleted Fields.
-        The order of these Fields in this list does not matter.
+        The order of these Fields in this list is chronological
+        by time of deletion; earliest first, latest last.
         '''
 
         # If deleted Fields were kept in the same list as active Fields,
         # they would interfere in the numbering of active Fields.
 
-        # Dict keys are Field labels.
-        # Dict values are 2-tuples of Field position before deletion, and
-        # the deleted Field.
-        self._deletedFields = dict()
+        # Values are 3-tuples of Field position before deletion,
+        # the deleted Field, and the modTime before deletion.
+        self._deletedFields = []
 
     def __init__(self, title: str):
         '''Initializer for MPrec class
@@ -360,8 +360,8 @@ class MPrec:
             pos = self.index(label)  # raises ValueError if label not found
         return pos
 
-    def _getField(self, /, *, pos:   int | None = None,
-                              label: str | None = None) -> Field:
+    def getField(self, /, *, pos:   int | None = None,
+                             label: str | None = None) -> Field:
         '''Returns an existing Field object in a MPrec, located
         either by display-position (pos), or by Field label.
         '''
@@ -369,8 +369,8 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
         return self[pos]
 
-    def _setField(self, /, field: Field, *, pos:   int | None = None,
-                                            label: str | None = None):
+    def setField(self, /, field: Field, *, pos:   int | None = None,
+                                           label: str | None = None):
         '''Replaces an existing Field object into a MPrec,
         either by display-position (pos), or by Field label.
         '''
@@ -379,8 +379,8 @@ class MPrec:
         self[pos] = field
         self._setRecModTime(_timeStamp())
 
-    def _setFieldValue(self, /, value: str, *, pos:   int | None = None,
-                                               label: str | None = None):
+    def setFieldValue(self, /, value: str, *, pos:   int | None = None,
+                                              label: str | None = None):
         '''Replaces an existing Field object into a MPrec,
         either by display-position (pos), or by Field label.
         '''
@@ -390,8 +390,8 @@ class MPrec:
         field._setValue(value)
         self._setRecModTime(field._getModTime())
 
-    def _getFieldValue(self, /, *, pos:   int | None = None,
-                                   label: str | None = None):
+    def getFieldValue(self, /, *, pos:   int | None = None,
+                                  label: str | None = None):
         '''Replaces an existing Field object into a MPrec,
         either by display-position (pos), or by Field label.
         '''
@@ -400,8 +400,8 @@ class MPrec:
         field = self[pos]
         return field._getValue()
 
-    def _setFieldLabel(self, /, newLabel: str, *, pos:      int | None = None,
-                                                  oldLabel: str | None = None):
+    def setFieldLabel(self, /, newLabel: str, *, pos:      int | None = None,
+                                                 oldLabel: str | None = None):
         '''Change the label of a Field.  Locate the Field by display
         position (pos) or label.
         '''
@@ -423,26 +423,26 @@ class MPrec:
         self._setFieldModTime(now, pos=pos)
         self._setRecModTime(now)
 
-    def _getFieldLabel(self, /, pos: int) -> str:
+    def getFieldLabel(self, /, pos: int) -> str:
         '''Get the label (str) of the specified (by position) Field.
         '''
 
         return self[pos].label
 
-    def _setFieldMask(self, /, masked: bool, *, pos:   int | None = None,
-                                                label: str | None = None):
+    def setFieldMask(self, /, masked: bool, *, pos:   int | None = None,
+                                               label: str | None = None):
         '''Change whether a Field is masked.
         '''
 
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
         if pos != self.titlePos:
-            self[pos]._setMask(masked)
+            self[pos]._setMask(bool(masked))
         now = _timeStamp()
         self._setFieldModTime(now, pos=pos)
         self._setRecModTime(now)
 
-    def _getFieldMask(self, /, *, pos:   int | None = None,
-                                  label: str | None = None) -> bool:
+    def getFieldMask(self, /, *, pos:   int | None = None,
+                                 label: str | None = None) -> bool:
         '''Retrieve Boolean for whether a Field is masked.
         '''
 
@@ -461,8 +461,8 @@ class MPrec:
         field._setModTime(timeValue)
         self._setRecModTime(timeValue)
 
-    def _getFieldModTime(self, /, *, pos:   int | None = None,
-                                     label: str | None = None):
+    def getFieldModTime(self, /, *, pos:   int | None = None,
+                                    label: str | None = None):
         '''Get the modTime of a Field, located
         either by display-position (pos), or by Field label.
         '''
@@ -471,8 +471,8 @@ class MPrec:
         field = self[pos]
         return field._getModTime()
 
-    def _changeFieldPos(self, /, toPos: int, *, fromPos: int | None = None,
-                                                label:   str | None = None):
+    def changeFieldPos(self, /, toPos: int, *, fromPos: int | None = None,
+                                               label:   str | None = None):
         '''Change the position of a Field in a Rec from one position index
         (or label) to another position, where position 0 is the title Field.
         '''
@@ -488,8 +488,8 @@ class MPrec:
             del self[fromPos]
             self.fieldsByPos.insert(toPos, field)  # WILL INSERT WORK WITH __GETITEM__ ?
 
-    def _delField(self, /, *, pos:   int | None = None,
-                              label: str | None = None):
+    def delField(self, /, *, pos:   int | None = None,
+                             label: str | None = None):
         '''Delete a field from an MPrec, but keep it around for sync logic.
 
         Can't actually delete it yet, since it could come back from
@@ -501,20 +501,35 @@ class MPrec:
         if pos != titlePos:
             field = self[pos]
             label = field._getLabel()
-            if label in self.deletedFields:
-                warning.warn('Duplicate Field label in deletedFields'
+#           if label in self.deletedFields:
+            if label in (fld.label for fld in self._deletedFields):
+                warnings.warn('Duplicate Field label in deletedFields'
                              ' replaces old value.')
-            self.deletedFields[label] = (pos, field)
+            self.deletedFields.append((pos, field, field._getModTime))
             now = _timeStamp()
             field._setModTime(now)
             self._setRecModTime(now)
             del self[pos]  # or must it be "del self.fieldsByPos[pos]"
 
-    def _undelField(self, /, label: str, force: bool = False) -> bool:
+    def undelField(self, /, label: str | None = None,
+                         *, force: bool = False) -> bool:
+        if label is None:
+            try:
+                origPos, field, modTime = _deletedFields.pop()
+            except IndexError:
+                warnings.warn('There are no undeleted Fields to undelete.')
+                return False
+        else:
+            try:
+                pos = (fld.label for (oP, fld, mT)
+                       in _deletedFields).index(label)
+            except ValueError:
+                warnings.warn(f'There is no deleted Field with label "{label}"')
+                return False
+            origPos, field, modTime = _deletedFields.pop(pos)
         if force or label not in self:
-            pos, field = deletedFields[label]
-            self.fieldsByPos.insert(pos, field)
-            del deletedFields[label]
+            field._setModTime(modTime)
+            self.fieldsByPos.insert(origPos, field)
             return True   # success
         else:
             return False  # failure
@@ -523,16 +538,16 @@ class MPrec:
         '''Format the MPrec instance as a string.
         '''
 
-        return self[self.titlePos].getValue()
+        return self[self.titlePos]._getValue()
 
     def __repr__(self) -> str:
         '''Format the MPrec instance as a string for developers
         '''
 
-        result = self[self.titlePos].getValue()
+        result = self[self.titlePos]._getValue()
         for field in self.fieldsByPos[self.titlePos+1:]:
             result += (f' \n  {field._getLabel()}: '
-                       f'{field.getValue()}')
+                       f'{field._getValue()}')
         return result
 
 
@@ -547,46 +562,46 @@ def _selfTest(args: list[str]) -> int:
     '''
 
     print('New record')
-    ron = MPrec('Ron')
-    print(f'RecID = {ron.id}')
-    print(f'recCreateTime = {time2str(ron.createTime)}')
+    r1 = MPrec('Ron')
+    print(f'RecID = {r1.id}')
+    print(f'recCreateTime = {time2str(r1.createTime)}')
     print()
 
     print('Title field')
-    print(f'Rec modTime {time2str(ron.getRecModTime())}')
-    for field in ron:
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
     print()
     print('Add field IP address')
-    ron.addField('IP address', '1.2.3.4')
-    print(f'Rec modTime {time2str(ron.getRecModTime())}')
-    for field in ron:
+    r1.addField('IP address', '1.2.3.4')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
     print()
     print('Add field password')
-    pos = ron.addField('password', '1234')
-    print(f'Rec modTime {time2str(ron.getRecModTime())}')
-    for field in ron:
+    pos = r1.addField('password', '1234')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
     print()
     print('Change value password')
-    ron._setFieldValue('5678', pos=pos)
-    print(f'Rec modTime {time2str(ron.getRecModTime())}')
-    for field in ron:
+    r1.setFieldValue('5678', pos=pos)
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
     print()
     print('Change field label password -> pswd')
-    ron._setFieldLabel('pswd', pos=pos)
-    print(f'Rec modTime {time2str(ron.getRecModTime())}')
-    for field in ron:
+    r1.setFieldLabel('pswd', pos=pos)
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
         print(f'Value = {field.value}, Type = {type(field.value)}')
         print(field.label,
               '*defunct field*' if field.value is None else field.value,
@@ -595,20 +610,20 @@ def _selfTest(args: list[str]) -> int:
     time.sleep(1)
     print()
     print('Add field unseen, masked=True')
-    pos = ron.addField('unseen', 'ABCD', masked=True)
-    print(f'Rec modTime {time2str(ron.getRecModTime())}')
-    for field in ron:
+    pos = r1.addField('unseen', 'ABCD', masked=True)
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
-    print(f'Masked field: {ron[pos]}')
+    print(f'Masked field: {r1[pos]}')
 
     time.sleep(1)
     print()
     print('Change mask of unseen to False')
-    ron._setFieldMask(masked=False, pos=pos)
-    print(f'Rec modTime {time2str(ron.getRecModTime())}')
-    for field in ron:
-        print(field._getLabel(), field.getValue(), time2str(field._getModTime()))
-    print(f'Now unmasked: {ron[pos]}')
+    r1.setFieldMask(masked=False, pos=pos)
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field._getLabel(), field._getValue(), time2str(field._getModTime()))
+    print(f'Now unmasked: {r1[pos]}')
 
     print()
     print('IDs in DB:')
