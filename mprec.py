@@ -99,12 +99,14 @@ class Field:
         '''Set the label attribute in a Field.
         '''
 
+        label = label.strip()
         # exact title is OK; case variations are not
-        if label != self.titleLabel:
-            if label.upper() == self.titleLabel.upper():
+        if (label != self.titleLabel
+            and label.upper() == self.titleLabel.upper()):
                 raise UserError(f'"{label}" is a reserved label.')
-
-        self.label = label.strip()
+        if len(label) == 0:
+            raise UserError('Field label may not be blank.')
+        self.label = label
         if setmodtime:
             self._setModTime(_timeStamp())
 
@@ -218,6 +220,12 @@ class MPrec:
             self.fieldsByPos.append(field)
         else:
             self.fieldsByPos[pos] = field
+
+    def __delitem__(self, pos: int):
+        '''Delete a Field from an MPrec by display-position.
+        '''
+
+        del self.fieldsByPos[pos]
 
     def __iter__(self) -> _RecIter:
         '''Creat iterator object for iterating over the Fields in a Rec.
@@ -376,6 +384,8 @@ class MPrec:
         '''
 
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
+        assert isinstance(field, Field), ('Rec._setFieldValue argument must'
+                                          ' be a Field instance')
         self[pos] = field
         self._setRecModTime(_timeStamp())
 
@@ -400,25 +410,25 @@ class MPrec:
         field = self[pos]
         return field._getValue()
 
-    def setFieldLabel(self, /, newLabel: str, *, pos:      int | None = None,
-                                                 oldLabel: str | None = None):
+    def setFieldLabel(self, /, newlabel: str, *, pos:      int | None = None,
+                                                 oldlabel: str | None = None):
         '''Change the label of a Field.  Locate the Field by display
         position (pos) or label.
         '''
 
-        if oldLabel is not None:
-            oldLabel = oldLabel.strip()
-        newLabel = newLabel.strip()
+        if oldlabel is not None:
+            oldlabel = oldlabel.strip()
+        newlabel = newlabel.strip()
         if pos == self.titlePos:
             raise ProgrammerError(f'Cannot change the label of a record title')
-        if newLabel in (field.label for field in self.fieldsByPos):
-            raise UserError(f'Record already has a field labeled "{newLabel}"')
-        if newLabel != self.titleLabel:
-            if newLabel.upper() == self.titleLabel.upper():
-                raise UserError(f'"{newLabel}" is a reserved label.')
-        pos = self._getFieldPosArg(pos=pos, label=oldLabel)  # ValueError posibl
+        if newlabel in (field.label for field in self.fieldsByPos):
+            raise UserError(f'Record already has a field labeled "{newlabel}"')
+        if newlabel != self.titleLabel:
+            if newlabel.upper() == self.titleLabel.upper():
+                raise UserError(f'"{newlabel}" is a reserved label.')
+        pos = self._getFieldPosArg(pos=pos, label=oldlabel)  # ValueError posibl
         self._updateRecVersion()
-        self[pos].label = newLabel
+        self[pos].label = newlabel
         now = _timeStamp()
         self._setFieldModTime(now, pos=pos)
         self._setRecModTime(now)
@@ -471,22 +481,18 @@ class MPrec:
         field = self[pos]
         return field._getModTime()
 
-    def changeFieldPos(self, /, toPos: int, *, fromPos: int | None = None,
+    def changeFieldPos(self, /, topos: int, *, frompos: int | None = None,
                                                label:   str | None = None):
         '''Change the position of a Field in a Rec from one position index
         (or label) to another position, where position 0 is the title Field.
         '''
 
-        fromPos = self._getFieldPosArg(pos=fromPos, label=label)  # ValueError?
-        if fromPos == self.titlePos or toPos == self.titlePos:
+        frompos = self._getFieldPosArg(pos=frompos, label=label)  # ValueError?
+        if frompos == self.titlePos or topos == self.titlePos:
             raise ProgrammerError('Cannot move a Field to or from position zero')
-        if fromPos < toPos:    # move Field to the right
-            self.fieldsByPos.insert(toPos, self[fromPos])
-            del self[fromPos]  # WILL THE "DEL" WORK WITH __GETITEM__ ?
-        elif fromPos > toPos:  # move Field to the left
-            field = self[fromPos]
-            del self[fromPos]
-            self.fieldsByPos.insert(toPos, field)  # WILL INSERT WORK WITH __GETITEM__ ?
+        field = self[frompos]
+        del self[frompos]
+        self.fieldsByPos.insert(topos, field)
 
     def delField(self, /, *, pos:   int | None = None,
                              label: str | None = None):
@@ -498,35 +504,45 @@ class MPrec:
         '''
 
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
-        if pos != titlePos:
+        if pos != self.titlePos:
             field = self[pos]
             label = field._getLabel()
-#           if label in self.deletedFields:
-            if label in (fld.label for fld in self._deletedFields):
+            if label in (fld.label for (fld, mT, oP) in self._deletedFields):
                 warnings.warn('Duplicate Field label in deletedFields'
                              ' replaces old value.')
-            self.deletedFields.append((pos, field, field._getModTime))
+            self._deletedFields.append((field, field._getModTime(), pos))
             now = _timeStamp()
-            field._setModTime(now)
+            field._setModTime(now)  # deleted Field now contains deletion time
             self._setRecModTime(now)
             del self[pos]  # or must it be "del self.fieldsByPos[pos]"
+
+    def listDeletedFields(self) -> tuple[tuple]:
+        '''Return a tuple of tuples of deleted Fields that can be undeleted.
+
+        Each inner tuple contains the following about a deleted Field:
+        1) the Field object
+        2) the modification timestamp that the Field had before deletion
+        3) the display-position that the Field had before deletion
+        '''
+
+        return tuple(self._deletedFields)
 
     def undelField(self, /, label: str | None = None,
                          *, force: bool = False) -> bool:
         if label is None:
             try:
-                origPos, field, modTime = _deletedFields.pop()
+                field, modTime, origPos = self._deletedFields.pop()
             except IndexError:
                 warnings.warn('There are no undeleted Fields to undelete.')
                 return False
         else:
             try:
-                pos = (fld.label for (oP, fld, mT)
-                       in _deletedFields).index(label)
+                pos = [fld.label for (fld, mT, oP)
+                       in self._deletedFields].index(label)
             except ValueError:
                 warnings.warn(f'There is no deleted Field with label "{label}"')
                 return False
-            origPos, field, modTime = _deletedFields.pop(pos)
+            field, modTime, origPos = self._deletedFields.pop(pos)
         if force or label not in self:
             field._setModTime(modTime)
             self.fieldsByPos.insert(origPos, field)
@@ -573,32 +589,35 @@ def _selfTest(args: list[str]) -> int:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
-    print()
-    print('Add field IP address')
+    print('\nAdd field IP address')
     r1.addField('IP address', '1.2.3.4')
     print(f'Rec modTime {time2str(r1.getRecModTime())}')
     for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
-    print()
-    print('Add field password')
+    print('\nRelabel field IP address, locating Field by old label')
+    r1.setFieldLabel('IPv4 address', oldlabel='IP address')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nAdd field password')
     pos = r1.addField('password', '1234')
     print(f'Rec modTime {time2str(r1.getRecModTime())}')
     for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
-    print()
-    print('Change value password')
+    print('\nChange value password')
     r1.setFieldValue('5678', pos=pos)
     print(f'Rec modTime {time2str(r1.getRecModTime())}')
     for field in r1:
         print(field.label, field.value, time2str(field._getModTime()))
 
     time.sleep(1)
-    print()
-    print('Change field label password -> pswd')
+    print('\nChange field label password -> pswd')
     r1.setFieldLabel('pswd', pos=pos)
     print(f'Rec modTime {time2str(r1.getRecModTime())}')
     for field in r1:
@@ -608,8 +627,7 @@ def _selfTest(args: list[str]) -> int:
               time2str(field._getModTime()))
 
     time.sleep(1)
-    print()
-    print('Add field unseen, masked=True')
+    print('\nAdd field unseen, masked=True')
     pos = r1.addField('unseen', 'ABCD', masked=True)
     print(f'Rec modTime {time2str(r1.getRecModTime())}')
     for field in r1:
@@ -617,16 +635,95 @@ def _selfTest(args: list[str]) -> int:
     print(f'Masked field: {r1[pos]}')
 
     time.sleep(1)
-    print()
-    print('Change mask of unseen to False')
+    print('\nChange mask of unseen to False')
     r1.setFieldMask(masked=False, pos=pos)
     print(f'Rec modTime {time2str(r1.getRecModTime())}')
     for field in r1:
         print(field._getLabel(), field._getValue(), time2str(field._getModTime()))
     print(f'Now unmasked: {r1[pos]}')
 
-    print()
-    print('IDs in DB:')
+    time.sleep(1)
+    print('\nAdd two more fields')
+    r1.addField('Phone', '412-999-9999')
+    r1.addField('Acct#', '123-44-5678')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nMove field 4 (Phone) to position 2 (to the left)')
+    r1.changeFieldPos(2, frompos=4)
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nMove field "IPv4 address" to position 4 (to the right)')
+    r1.changeFieldPos(4, label='IPv4 address')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nDelete field 3 (unseen)')
+    r1.delField(pos=3)
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nDelete field "IPv4 address"')
+    r1.delField(label='IPv4 address')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nDelete field 1 (Phone)')
+    r1.delField(pos=1)
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    print('\nList deleted Fields')
+    df_s = r1.listDeletedFields()
+    for (field, origModTime, origPos) in df_s:
+        print(field.label, time2str(origModTime), f'pos={origPos}')
+
+    time.sleep(1)
+    print('\nUndelete last field deleted (Phone)')
+    r1.undelField()
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nUndelete field "unseen"')
+    r1.undelField(label='unseen')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    print('\nUndelete nonexistent field "Wxyz"')
+    r1.undelField(label='Wxyz')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    time.sleep(1)
+    print('\nUndelete field "IPv4 address"')
+    r1.undelField(label='IPv4 address')
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    print('\nUndelete last field deleted when there are none')
+    r1.undelField()
+    print(f'Rec modTime {time2str(r1.getRecModTime())}')
+    for field in r1:
+        print(field.label, field.value, time2str(field._getModTime()))
+
+    print('\nIDs in DB:')
     for id in _db:
         print(id)
     return normalExit  # to OS (sys.exit)
