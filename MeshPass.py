@@ -37,10 +37,48 @@ MY_IP_ADDRESS = None
 if SYSTEM == LINUX:
     data = subprocess.run(['ip', 'addr'], capture_output=True).stdout.decode(FORMAT)
     print(f'{type(data)}')
-    pat = r"(192|172|10)\.\d+\.\d+\.\d+"
+    pat = r"inet ((?:192|172|10)\.\d+\.\d+\.\d+)"
     MY_IP_ADDRESS = re.search(pat, data).group(0)
+elif SYSTEM == WINDOWS:
+    data = subprocess.run(['ipconfig'], capture_output=True).stdout.decode(FORMAT)
+    data_by_line = data.split(' ')
+    title = None
+    title_pattern = r"(\w[^:]*)"
+    ip_pattern = r'IPv4 Address[ .]*: (\d+\.\d+\.\d+\.\d+)'
+    default_gateway_pattern = r'Default Gateway[ .]*: (\d+\.\d+\.\d+\.\d+)'
+    title_match = None
+    ip_match = None
+    default_gateway_found = False
+    for line in data_by_line:
+        title_match = re.search(title_pattern, line)
+        if title_match:
+            title = title_match.group(0)
+            default_gateway_found = False
+            MY_IP_ADDRESS = None
+            pass
+        
+        ip_match = re.search(ip_pattern, line)
+        if ip_match:
+            MY_IP_ADDRESS = ip_match.group(1)
+
+        if re.search(default_gateway_pattern, line):
+            default_gateway_found = True
+
+        if title and MY_IP_ADDRESS and default_gateway_found:
+            break
 else:
-    MY_IP_ADDRESS = socket.gethostbyname(MYHOSTNAME)
+    print(f'Unknown system.')
+    return 0
+
+
+
+    pat = r"(^(?:\w+)[^\:]*)[\s\S]*(?:IPv4 Address)[ .:]*(\d+\.\d+\.\d+\.\d+)"
+    match = re.search(pat, data)
+    title = match.group(1)
+    print(f'{title}')
+    ip_address = match.group(2)
+    print(f'{ip_address}')
+
 print(f'MY_IP_ADDRESS: {MY_IP_ADDRESS}')
 MY_TCP_PORT   = 5051
 UNICAST_UDP_PORT = 5052
