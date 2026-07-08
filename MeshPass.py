@@ -41,18 +41,22 @@ if SYSTEM == LINUX:
     MY_IP_ADDRESS = re.search(pat, data).group(0)
 elif SYSTEM == WINDOWS:
     data = subprocess.run(['ipconfig'], capture_output=True).stdout.decode(FORMAT)
-    data_by_line = data.split(' ')
+    print(f'ipconfig data: {data}')
+    data_by_line = data.splitlines()
     title = None
-    title_pattern = r"(\w[^:]*)"
+    title_pattern = r"(\w[:]*):"
     ip_pattern = r'IPv4 Address[ .]*: (\d+\.\d+\.\d+\.\d+)'
     default_gateway_pattern = r'Default Gateway[ .]*: (\d+\.\d+\.\d+\.\d+)'
     title_match = None
     ip_match = None
     default_gateway_found = False
+
     for line in data_by_line:
+        print(f'data_by_line: {line}')
         title_match = re.search(title_pattern, line)
         if title_match:
             title = title_match.group(0)
+            print(f'title match found: {title}')
             default_gateway_found = False
             MY_IP_ADDRESS = None
             pass
@@ -60,15 +64,16 @@ elif SYSTEM == WINDOWS:
         ip_match = re.search(ip_pattern, line)
         if ip_match:
             MY_IP_ADDRESS = ip_match.group(1)
+            print(f'ip match found: {MY_IP_ADDRESS}')
 
         if re.search(default_gateway_pattern, line):
+            print(f'default gateway found.')
             default_gateway_found = True
 
         if title and MY_IP_ADDRESS and default_gateway_found:
             break
 else:
     print(f'Unknown system.')
-    return 0
 
 
 
