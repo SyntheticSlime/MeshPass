@@ -38,13 +38,13 @@ if SYSTEM == LINUX:
     data = subprocess.run(['ip', 'addr'], capture_output=True).stdout.decode(FORMAT)
     print(f'{type(data)}')
     pat = r"inet ((?:192|172|10)\.\d+\.\d+\.\d+)"
-    MY_IP_ADDRESS = re.search(pat, data).group(0)
+    MY_IP_ADDRESS = re.search(pat, data).group(1)
 elif SYSTEM == WINDOWS:
     data = subprocess.run(['ipconfig'], capture_output=True).stdout.decode(FORMAT)
     print(f'ipconfig data: {data}')
     data_by_line = data.splitlines()
     title = None
-    title_pattern = r"(\w[:]*):"
+    title_pattern = r"(\w[^:]*)"
     ip_pattern = r'IPv4 Address[ .]*: (\d+\.\d+\.\d+\.\d+)'
     default_gateway_pattern = r'Default Gateway[ .]*: (\d+\.\d+\.\d+\.\d+)'
     title_match = None
@@ -135,7 +135,7 @@ def main(cli_args):
                                        socket.SOCK_DGRAM,
                                        socket.IPPROTO_UDP
                                       )
-
+    print(f'my ip address and unicast udp port: {MY_IP_ADDRESS}, {UNICAST_UDP_PORT}')
     unicast_socket_obj.bind(UNICAST_TUPLE)
 
     # Time-To-Live is 1 because multicast packets can't traverse router anyway.
@@ -212,10 +212,11 @@ def listen_for_unicast(unicast_socket_obj, found_devices):
         message = data.decode(FORMAT)
         message_parts = message.split(':')
         if message_parts[0] == 'IM HERE':
-            device_id  = message_parts[1]
-            user_id    = message_parts[2]
-            user_name  = message_parts[3]
-            public_key = message_parts[4]
+            #device_id  = message_parts[1]
+            #user_id    = message_parts[2]
+            #user_name  = message_parts[3]
+            #public_key = message_parts[4]
+            [device_id, user_id, user_name, public_key] = message_parts[1:]
             ip, port   = partner_socket_tuple
             print(f'USERNAME: {user_name}')
             device_already_found = False
