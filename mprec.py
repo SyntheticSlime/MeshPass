@@ -19,12 +19,11 @@ from inspect import getframeinfo, currentframe  # used in _getFieldPosArg
 
 # = = = = =   H O M E - G R O W N   M O D U L E S   = = = = =
 
-from exceptions import *  # additional Exceptions
+from exceptions import *  # additional Exceptions: UserError, ProgrammerError
 
 
 # = = = = =   C O N S T A N T S   = = = = =
 
-version = 0           # MPrec object version
 _maxRandom = 2 ** 32  # Largest permissible value of recID + 1
 
 
@@ -78,12 +77,19 @@ class TimeStamp:
     representation of them, or the functions involved, all in one place.
     '''
 
+    #   V A R I A B L E S
+    tsformat = '%Y/%m/%d %H:%M:%S'
+    GMT = False
+
     def __init__(self, timeValue: float = None):
         '''Initialize new TimeStamp instance.
         If no timeValue is provided, it defaults to now.
         '''
 
-        self._set(timeValue)
+        if isinstance(timeValue, TimeStamp):
+            self._set(timeValue.get())
+        else:
+            self._set(timeValue)
 
     def _set(self, timeValue: float = None) -> float:
         '''Set the time value of an existing TimeStamp instance
@@ -118,6 +124,127 @@ class TimeStamp:
 
         return time.ctime(self.get())
 
+    @classmethod
+    def setTSformat(cls, tsformat: str,
+                         custom: str = None,
+                         *, GMT: bool = False):
+        '''Set date/time format for TimeStamp class or one of its subclasses.
+
+        tsformat is one of: USA, EUR, univ, local, or custom.
+        If custom is specified, you must also provide a custom format string.
+        If you want GMT instead of local time, specify GMT=True.
+        Custom format directives include:
+        DIRECTIVE   MEANING
+        %a          Locale's abbreviated weekday name.
+        %A          Locale's full weekday name.
+        %b          Locale's abbreviated month name.
+        %B          Locale's full month name.
+        %c          Locale's appropriate date and time representation.
+        %d          Day of the month as a decimal number [01,31].
+        %f          Microseconds as a decimal number [000000,999999].
+        %H          Hour (24-hour clock) as a decimal number [00,23].
+        %I          Hour (12-hour clock) as a decimal number [01,12].
+        %j          Day of the year as a decimal number [001,366].
+        %m          Month as a decimal number [01,12].
+        %M          Minute as a decimal number [00,59].
+        %p          Locale's equivalent of either AM or PM.
+        %S          Second as a decimal number [00,61].
+        %U          Week number of the year (Sunday as the first day of the
+                    week) as a decimal number [00,53]. All days in a new year
+                    preceding the first Sunday are considered to be in week 0.
+        %u          Day of the week (Monday is 1; Sunday is 7) as
+                    a decimal number [1, 7].
+        %w          Weekday as a decimal number [0(Sunday),6].
+        %W          Week number of the year (Monday as the first day of the
+                    week) as a decimal number [00,53]. All days in a new year
+                    preceding the first Monday are considered to be in week 0.
+        %x          Locale's appropriate date representation.
+        %X          Locale's appropriate time representation.
+        %y          Year without century as a decimal number [00,99].
+        %Y          Year with century as a decimal number.
+        %z          Time zone offset indicating a positive or negative time
+                    difference from UTC/GMT of the form +HHMM or -HHMM,
+                    where H represents decimal hour digits and M represents
+                    decimal minute digits [-23:59, +23:59].
+        %Z          Time zone name (no characters if no time zone exists).
+                    Deprecated.
+        %G          ISO 8601 year (similar to %Y but follows the rules for
+                    the ISO 8601 calendar year). The year starts with the week
+                    that contains the first Thursday of the calendar year.
+        %V          ISO 8601 week number (as a decimal number [01,53]).
+                    The first week of the year is the one that contains the
+                    first Thursday of the year. Weeks start on Monday.
+        %%          A literal '%' character.
+        '''
+        
+        if tsformat == 'USA':
+            cls.tsformat = '%m/%d/%Y %I:%M:%S %p'
+        elif tsformat == 'EUR':
+            cls.tsformat = '%d/%m/%Y %H:%M:%S'
+        elif tsformat == 'univ':
+            cls.tsformat = '%Y/%m/%d %H:%M:%S'
+        elif tsformat == 'local':
+            cls.tsformat = '%x %X'
+        elif tsformat == 'custom':
+            if custom is None:
+                raise UserError('When tsformat is "custom," you must'
+                                ' supply a custom format string')
+            else:
+                try:
+                    time.strftime(custom, time.gmtime())
+                except ValueError:
+                    warnings.warn(f'Invalid custom timestamp format string:'
+                                  f' {custom}')
+                else:  # if there was no Exception
+                    cls.tsformat = custom
+        else:
+            raise UserError('tsformat must be specified as one of:'
+                            '  USA, EUR, univ, local, custom')
+        cls.GMT = GMT  # True for GMT (UTC), False for local
+
+    def __str__(self):
+        '''Convert TimeStamp to readable text.
+        User can specify a date/time format for the class.
+        Create subclasses to have different formats for
+        different types of TimeStamps.
+        '''
+
+        gmt = self.__class__.GMT
+        tsformat = self.__class__.tsformat
+        func = time.gmtime if gmt else time.localtime
+        tstuple = func(self.get())
+        return time.strftime(tsformat, tstuple) + (' GMT' if gmt else '')
+
+    def __eq__(self, other: TimeStamp) -> bool:
+        return self.get() == other.get()
+    def __ne__(self, other: TimeStamp) -> bool:
+        return self.get() != other.get()
+    def __lt__(self, other: TimeStamp) -> bool:
+        return self.get() <  other.get()
+    def __le__(self, other: TimeStamp) -> bool:
+        return self.get() <= other.get()
+    def __gt__(self, other: TimeStamp) -> bool:
+        return self.get() >  other.get()
+    def __ge__(self, other: TimeStamp) -> bool:
+        return self.get() >= other.get()
+
+class CreationTimeStamp(TimeStamp):
+    '''Subclass of TimeStamp to provide a different
+    date/time format just for creation timestamps.
+    '''
+
+    #   V A R I A B L E S
+    tsformat = '%x'
+    GMT = False
+
+class ModTimeStamp(TimeStamp):
+    '''Subclass of TimeStamp to provide a different
+    date/time format just for modification timestamps.
+    '''
+
+    #   V A R I A B L E S
+    tsformat = '%x %X'
+    GMT = False
 
 class Field:
     '''Field class contains the value of one field in a record
@@ -132,7 +259,7 @@ class Field:
 
         self.value = str(value)
         if setmodtime:
-            self._setModTime(TimeStamp())  # now
+            self._setModTime(ModTimeStamp())  # now
 
     def _getValue(self) -> str:
         '''Get the value attribute's value and return it.
@@ -152,9 +279,13 @@ class Field:
                 raise UserError(f'"{label}" is a reserved label.')
         if len(label) == 0:
             raise UserError('Field label may not be blank.')
+        # Reserve * at start or end of label for search wildcards.
+        if label[0] == '*' or label[-1] == '*':
+            raise UserError('Field label may not start'
+                            ' or end with an asterisk.')
         self.label = label
         if setmodtime:
-            self._setModTime(TimeStamp())  # now
+            self._setModTime(ModTimeStamp())  # now
 
     def _getLabel(self) -> str:
         '''Get the label attribute's value and return it.
@@ -162,13 +293,13 @@ class Field:
 
         return self.label
 
-    def _setModTime(self, timeValue: float):
+    def _setModTime(self, tstamp: TimeStamp):
         '''Set modification timestamp of a Field.
         '''
 
-        self.modTime = timeValue
+        self.modTime = tstamp
 
-    def _getModTime(self) -> float:
+    def _getModTime(self) -> ModTimeStamp:
         '''Retrieve the modification timestamp of a Field.
         '''
 
@@ -181,7 +312,7 @@ class Field:
 
         self.masked = bool(masked)
         if setmodtime:
-            self._setModTime(TimeStamp())  # now
+            self._setModTime(ModTimeStamp())  # now
 
     def _getMask(self) -> bool:
         '''Retrieve whether a Field value is masked when displayed
@@ -202,7 +333,8 @@ class Field:
         self._setLabel(label, setmodtime=False)
         self._setValue(value, setmodtime=False)
         self._setMask(masked, setmodtime=False)
-        self._setModTime(TimeStamp())  # now
+        now = ModTimeStamp()
+        self._setModTime(now)
 
     def __str__(self) -> str:
         '''Format the Field instance as a string.
@@ -244,8 +376,88 @@ class MPrec:
     '''MPrec class instance contains one record of multiple fields
     '''
 
+    #   C O N S T A N T S
+    pgmRecVersion = 0     # MPrec object version
     titleLabel = 'Title'  # The label for the title field in a record.
     titlePos   = 0        # The record title is always in position zero.
+
+    #   V A R I A B L E S
+    mostRecentRecordTS = ModTimeStamp(0)  # zero seconds since 1/1/1970 00:00:00 UTC
+                                       # Should be updated by a function that
+                                       # scans all records.
+
+    #   M E T H O D S
+
+    def validateRecord(self) -> tuple[bool, ModTimeStamp, str]:
+        '''Check reasonableness of MPrec and return modTime.
+
+        Check that modTime and createTime make sense.
+        Check that all members of fieldByPos are Fields.
+        Return a 3-tuple with a bool for success[T]/failure[F]; modTime
+        TimeStamp so an initial scan of all records can determine
+        the TimeStamp of the most recent record, i.e., the TimeStamp
+        of the DB of MPrecs; and a string of messages.
+        '''
+
+        now = TimeStamp()
+        message = ''
+        if self.createTime > self.modTime:  # create time after modTime?
+            message += (f'{"\n" if len(message) > 0 else ''}'
+                        f'Creation timestamp later than modification timestamp in record:'
+                        f'  {self.getFieldValue(pos=self.titlePos)}')
+        if self.modTime > now:  # record modTime in the future?
+            message += (f'{"\n" if len(message) > 0 else ''}'
+                        f'Modification timestamp is in the future in record:'
+                        f'  {self.getFieldValue(pos=self.titlePos)}')
+        if self.createTime > now:  # record create time in the future?
+            message += (f'{"\n" if len(message) > 0 else ''}'
+                        f'Modification timestamp is in the future in record:'
+                        f'  {self.getFieldValue(pos=self.titlePos)}')
+        for fld in self:
+            if isinstance(fld, Field):
+                if fld._getModTime() < self.createTime:  # field modTime before record creation?
+                    message += (f'{"\n" if len(message) > 0 else ''}'
+                                f'Field modTime < record createTime in record:'
+                                f'  {self.getFieldValue(pos=self.titlePos)}')
+                if fld._getModTime() > now:  # field modTime in the future?
+                    message += (f'{"\n" if len(message) > 0 else ''}'
+                                f'Field modTime is in the future in record:'
+                                f'  {self.getFieldValue(pos=self.titlePos)}')
+            else:
+                message += (f'{"\n" if len(message) > 0 else ''}'
+                            f'non-Field object in record:'
+                            f'  {self.getFieldValue(pos=self.titlePos)}')
+        for (fld, oldModTime, oldPos) in self._deletedFields:
+            if not isinstance(fld, Field):
+                message += (f'{"\n" if len(message) > 0 else ''}'
+                            f'non-Field object in deleted Fields:'
+                            f'  {self.getFieldValue(pos=self.titlePos)}')
+            if not isinstance(oldModTime, TimeStamp):
+                message += (f'{"\n" if len(message) > 0 else ''}'
+                            f'Non-TimeStamp object in deleted Fields:'
+                            f'  {self.getFieldValue(pos=self.titlePos)}')
+            if not isinstance(oldPos, int) or oldPos <= self.titlePos:
+                message += (f'{"\n" if len(message) > 0 else ''}'
+                            f'Saved position not a positive integer in deleted Fields:'
+                            f'  {self.getFieldValue(pos=self.titlePos)}')
+            if oldModTime > fld.modTime:  # saved modTime later than deletion time?
+                message += (f'{"\n" if len(message) > 0 else ''}'
+                            f'Saved modTime after deletion time in deleted Fields:'
+                            f'  {self.getFieldValue(pos=self.titlePos)}')
+        OK = len(message) == 0
+        return (OK, self.getRecModTime(), message)
+
+    def validateTimeStamp(self, tstamp: TimeStamp):
+        if tstamp < self.mostRecentRecordTS:
+            raise UserError('Current time is prior to TimeStamp on'
+                            ' most recent record.')
+
+    def newerRecord(self, tstamp: ModTimeStamp):
+        if tstamp < self.__class__.mostRecentRecordTS:
+            raise UserError('Current time is prior to TimeStamp on'
+                            ' most recent record.')
+        else:
+            self.__class__.mostRecentRecordTS = tstamp
 
     def __getitem__(self, pos: int) -> Field:
         '''Obtain a Field from the list of Fields in a Rec ordered by
@@ -288,15 +500,14 @@ class MPrec:
         '''
 
         fieldLabel = fieldLabel.strip()
-        ndx = 0
-#       for field in self.fieldsByPos:  # COULD JUST USE "SELF"
-        for field in self:
+        ndx = start
+        for field in self[start:]:
             if field._getLabel() == fieldLabel:
                 return ndx
             else:
                 ndx += 1
         raise ValueError(f'There is no field labeled "{fieldLabel}" in'
-                         f' record "{self[titlePos].value}".')
+                         f' record "{self[self.titlePos].value}".')
 
     def __contains__(self, targetLabel: str) -> bool:
         '''Overload the "in" operator for labels in an MPrec
@@ -304,26 +515,39 @@ class MPrec:
 
         return targetLabel in (field.label for field in self.fieldsByPos)
 
-    def _setRecModTime(self, timeValue: float):
+    def _setRecModTime(self, tstamp: TimeStamp):
         '''Set the modTime of a record to the specified timestamp.
         '''
 
-        self.modTime = timeValue
+        self.modTime = tstamp
 
-    def getRecModTime(self) -> float:
+    def getRecModTime(self) -> ModTimeStamp:
         '''Get the modTime of a record.
         '''
 
         return self.modTime
+
+    def getCreateTime(self) -> TimeStamp:
+        '''Get the createTime of a record.
+        '''
+
+        return self.createTime
 
     def _updateRecVersion(self):
         '''Ensure that record version in DB is
            the same as in the software.
         '''
 
-        if self.version < version:
-            pass  # add steps necessary to change version
-            self.version = version
+        if self.version < MPrec.pgmRecVersion:
+            if self.version == 0:
+                if MPrec.pgmRecVersion == 1:
+                    pass  # add steps necessary to upgrade rec v0->v1
+                elif MPrec.pgmRecVersion == 2:
+                    pass  # add steps necessary to upgrade rec v0->v2
+            elif self.version == 1:
+                if MPrec.pgmRecVersion == 2:
+                    pass  # add steps necessary to upgrade rec v1->v2
+            self.version = MPrec.pgmRecVersion
 
     def _initFieldsByPos(self):
         '''Initializes fieldsByPos, an ordered [by
@@ -355,15 +579,17 @@ class MPrec:
         '''Initializer for MPrec class
         '''
 
-        self.version = version
+        self.version = MPrec.pgmRecVersion
         self.id = _genRecID(_db)
         self._initFieldsByPos()
         self._initDeletedFields()
         pos = self.addField(self.titleLabel, title)
         assert pos == self.titlePos, ('The title Field of a'
                                       ' record must be Field zero')
-        self.createTime = self[pos]._getModTime()
-        self._setRecModTime(self.createTime)
+        modTime = self[pos]._getModTime()
+        self.createTime = CreationTimeStamp(modTime)
+        self._setRecModTime(modTime)
+        self.newerRecord(modTime)
 
     def _addToFieldsByPos(self, field: Field) -> int:
         '''Just add a Field to a MPrec.
@@ -386,10 +612,10 @@ class MPrec:
                 raise UserError(f'"{label}" is a reserved label.')
         if label in self:
             raise UserError(f'Record already has a field labeled "{label}"')
+        now = ModTimeStamp()
+        self.validateTimeStamp(now)
         pos = self._addToFieldsByPos(Field(label, value, masked=masked))
-        now = TimeStamp()
-        self._setFieldModTime(now, pos=pos)
-        self._setRecModTime(now)
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
         return pos
 
     def _getFieldPosArg(self, *, pos:   int | None = None,
@@ -397,7 +623,7 @@ class MPrec:
         '''Returns the position of`an existing Field in a MPrec,
         located either by display-position (pos), or by Field label.
         If locating via label and it isn't found, ValueError is
-        raised [by method "index".
+        raised [by method "index"].
         '''
 
         # The "inspect" module provides the means to get the frame in which
@@ -414,7 +640,39 @@ class MPrec:
             raise ProgrammerError(f'You cannot specify both "pos" and "label"'
                                   f' arguments in call to {callingMethodName}.')
         if pos is None:
-            pos = self.index(label)  # raises ValueError if label not found
+            pos = 0
+            if label[0] == '*' and label[-1] == '*':  # contains
+                for fld in self.fieldsByPos:
+                    if label in fld.label:
+                        break
+                    else:
+                        pos += 1
+                else:
+                    raise ValueError(f'There is no field label containing'
+                                     f' "{fieldLabel}" in'
+                                     f' record "{self[self.titlePos].value}".')
+            elif label[0] == '*':                     # ends with
+                for fld in self.fieldsByPos:
+                    if fld.label.endswith(label):
+                        break
+                    else:
+                        pos += 1
+                else:
+                    raise ValueError(f'There is no field label ending with'
+                                     f' "{fieldLabel}" in'
+                                     f' record "{self[self.titlePos].value}".')
+            elif label[-1] == '*':                    # starts with
+                for fld in self.fieldsByPos:
+                    if fld.label.startswith(label):
+                        break
+                    else:
+                        pos += 1
+                else:
+                    raise ValueError(f'There is no field label starting with'
+                                     f' "{fieldLabel}" in'
+                                     f' record "{self[self.titlePos].value}".')
+            else:
+                pos = self.index(label)  # raises ValueError if label not found
         return pos
 
     def getField(self, *, pos:   int | None = None,
@@ -426,8 +684,8 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
         return self[pos]
 
-    def _setField(self, /, field: Field, *, pos:   int | None = None,
-                                            label: str | None = None):
+    def _setField(self, field: Field, *, pos:   int | None = None,
+                                         label: str | None = None):
         '''Replaces an existing Field object in a MPrec,
         either by display-position (pos), or by Field label.
         '''
@@ -436,10 +694,12 @@ class MPrec:
         assert isinstance(field, Field), ('Rec._setField argument must'
                                           ' be a Field instance')
         self[pos] = field
-        self._setRecModTime(TimeStamp())
+        now = ModTimeStamp()
+        self._setRecModTime(now)
+        self.newerRecord(now)
 
-    def setFieldValue(self, /, value: str, *, pos:   int | None = None,
-                                              label: str | None = None):
+    def setFieldValue(self, value: str, *, pos:   int | None = None,
+                                           label: str | None = None):
         '''Replaces an existing Field object into a MPrec,
         either by display-position (pos), or by Field label.
         '''
@@ -447,7 +707,9 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
         field = self[pos]
         field._setValue(value)
-        self._setRecModTime(field._getModTime())
+        modTime = field._getModTime()
+        self._setRecModTime(modTime)
+        self.newerRecord(modTime)
 
     def getFieldValue(self, *, pos:   int | None = None,
                                label: str | None = None):
@@ -478,9 +740,9 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=oldlabel)  # ValueError posibl
         self._updateRecVersion()
         self[pos].label = newlabel
-        now = TimeStamp()
-        self._setFieldModTime(now, pos=pos)
-        self._setRecModTime(now)
+        now = ModTimeStamp()
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
 
     def getFieldLabel(self, pos: int) -> str:
         '''Get the label (str) of the specified (by position) Field.
@@ -497,9 +759,9 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
         if pos != self.titlePos:
             self[pos]._setMask(bool(masked))
-        now = TimeStamp()
-        self._setFieldModTime(now, pos=pos)
-        self._setRecModTime(now)
+        now = ModTimeStamp()
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
 
     def getFieldMask(self, *, pos:   int | None = None,
                               label: str | None = None) -> bool:
@@ -509,19 +771,19 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
         return self[pos]._getMask()
 
-    def _setFieldModTime(self, timeValue: float,
-                               *, pos:       int | None = None,
-                                  label:     str | None = None):
-        '''Sets the modTime of a Field, located
-        either by display-position (pos), or by Field label.
-        '''
+#   def _setFieldModTime(self, timeValue: float,
+#                              *, pos:       int | None = None,
+#                                 label:     str | None = None):
+#       '''Sets the modTime of a Field, located
+#       either by display-position (pos), or by Field label.
+#       '''
 
-        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
-        field = self[pos]
-        field._setModTime(timeValue)
-        self._setRecModTime(timeValue)
+#       pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
+#       field = self[pos]
+#       field._setModTime(timeValue)
+#       self._setRecModTime(timeValue)
 
-    def _setModTimes(self, timeValue: float,
+    def _setModTimes(self, tstamp: TimeStamp,
                            *, pos:       int | None = None,
                               label:     str | None = None):
         '''Sets the modTime of a Field, located
@@ -531,11 +793,11 @@ class MPrec:
 
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
         field = self[pos]
-        field._setModTime(timeValue)
-        self._setRecModTime(timeValue)
+        field._setModTime(tstamp)
+        self._setRecModTime(tstamp)
 
     def getFieldModTime(self, *, pos:   int | None = None,
-                                 label: str | None = None):
+                                 label: str | None = None) -> TimeStamp:
         '''Get the modTime of a Field, located
         either by display-position (pos), or by Field label.
         '''
@@ -556,6 +818,9 @@ class MPrec:
         field = self[frompos]
         del self[frompos]
         self.fieldsByPos.insert(topos, field)
+        now = ModTimeStamp()
+        self._setRecModTime(now)
+        self.newerRecord(now)
 
     def delField(self, *, pos:   int | None = None,
                           label: str | None = None):
@@ -576,10 +841,11 @@ class MPrec:
                 warnings.warn('Duplicate Field label in deletedFields'
                              ' replaces old value.')
             self._deletedFields.append((field, field._getModTime(), pos))
-            now = TimeStamp()
+            now = ModTimeStamp()
             field._setModTime(now)  # deleted Field now contains deletion time
             self._setRecModTime(now)
-            del self[pos]  # or must it be "del self.fieldsByPos[pos]"
+            self.newerRecord(now)
+            del self[pos]
 
     def listDeletedFields(self) -> tuple[tuple]:
         '''Return a tuple of tuples of deleted Fields that can be undeleted.
@@ -597,23 +863,26 @@ class MPrec:
         '''Undelete a Field back into an MPrec.
         '''
 
-        if label is None:
+        if label is None:  # undelete last deleted Field
             try:
                 field, modTime, origPos = self._deletedFields.pop()
             except IndexError:
                 warnings.warn('There are no undeleted Fields to undelete.')
                 return False
-        else:
+        else:              # undelete specified Field
             try:
                 pos = [fld.label for (fld, _, _)
-                       in self._deletedFields]  .index(label)
+                       in self._deletedFields   ].index(label)
             except ValueError:
-                warnings.warn(f'There is no deleted Field with label "{label}"')
+                warnings.warn(f'There is no deleted Field with title "{label}"')
                 return False
             field, modTime, origPos = self._deletedFields.pop(pos)
         if force or label not in self:
             field._setModTime(modTime)
             self.fieldsByPos.insert(origPos, field)
+            now = ModTimeStamp()
+            self._setRecModTime(now)
+            self.newerRecord(now)
             return True   # success
         else:
             return False  # failure
