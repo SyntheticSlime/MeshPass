@@ -1,6 +1,6 @@
 # passwordgen.py
 '''Establish sets of rules for generating passwords.'''
-    
+
 #   I M P O R T S
 import random  # choice(), shuffle()
 import string  # ascii_uppercase, ascii_lowercase, ascii_letters, digits,
@@ -57,107 +57,179 @@ class PasswordGen:
                          + (' ' if spacesallowed else '')
                         )
 
-    def genPassword(self, preferredlen: int = 12):
+    def genPassword(self, preferredlen: int = 12, *, test=False):
         '''Generate a password for a particular site.'''
 
-        password = ''
+        def shuffle(chars: str) -> str:
+            charsList = list(chars)
+            shuffled = ''
+            while len(charsList) > 0:
+                shuffled += charsList.pop(random.randint(0, len(charsList)-1))
+            return shuffled
+
         charTypes = ((string.ascii_uppercase, self.uc),
                      (string.ascii_lowercase, self.lc),
                      (string.ascii_letters, self.letters - self.uc - self.lc),
                      (string.digits, self.num),
                      (self.specials, self.specialsQty),
                     )
-        for (chars, qty) in charTypes:
-            for n in range(qty):
-                password += random.choice(chars)
-        for n in range(max(self.minLen,
-                           min(self.maxLen, preferredlen))
-                       - len(password)):
-            password += random.choice(self.allChars)
-        pswdletters = list(password)
-        random.shuffle(pswdletters)
-        password = ''.join(pswdletters)
-
-        runsAcceptable = self.maxRun is None
+        runsAcceptable = False
         while not runsAcceptable:
-            runTooMany = self.maxRun + 1
-            for i in range(len(password) - self.maxRun - 1):
-                if password[i:i+runTooMany] == (password[i] * runTooMany):
-                    break
-            else:  # didn't break out of loop
+            password = ''
+            # Choose required quantity of characters of required types
+            for (chars, qty) in charTypes:
+                for n in range(qty):
+                    password += random.choice(chars)
+            # Choose additional characters to reach password's target length
+            for n in range(max(self.minLen,
+                               min(self.maxLen, preferredlen))
+                           - len(password)):
+                password += random.choice(self.allChars)
+
+            # Check for illegally long runs of same character
+            if self.maxRun is None:
                 runsAcceptable = True
+            else:
+                for i in range(len(password) - self.maxRun):
+                    if (password[i+1 : i+self.maxRun+1]
+                        == password[i] * self.maxRun):
+                        if test:
+                            print(f'Too many chars in run "{password}"...retrying')
+                        if self.maxRun == 0:  # Zero is useful for testing
+                            self.maxRun = None  # stop infinite loop
+                        break
+                else:  # didn't break out of loop
+                    runsAcceptable = True
         return password
 
 #   R U L E   S E T S
 
-aaadotcom = PasswordGen(minlen=6, maxlen=31, uc=0, lc=0,
-                        specials='^-!@#{}~$_', specialsqty=0)
-alleghenyalerts = PasswordGen(minlen=8, uc=0, lc=0, letters=0, num=0,
-                              specials='!@#$%^&*()', specialsqty=0)
-badlandsranch = PasswordGen(minlen=8, specials='!&$%^*@')
-bitly = PasswordGen(minlen=6, uc=0, lc=0)
-breville = PasswordGen(minlen=6, uc=0, lc=0, letters=0, specialsqty=0)
-chatgpt = PasswordGen(minlen=8, uc=0, lc=0, letters=0, num=0, specialsqty=0)
-choiceprivileges = PasswordGen(minlen=8, maxlen=44, uc=0, lc=0, letters=0,
-                               num=0, specialsqty=0)
-cisconetacad = PasswordGen(minlen=8, history=3)
-citicards = PasswordGen(minlen=8, maxlen=64, uc=0, lc=0, maxrun=2,
-                        specials='~`!@#$%^&*()_-\\/|', specialsqty=0)
-citizensbank = PasswordGen(minlen=8, maxlen=24, uc=0, lc=0,
-                           spacesallowed=False,
-                           specials='`~!@#$%^&*()-_=+[]{}|;:\',./<>?')
-costco = PasswordGen(minlen=8, maxlen=16, specials='!@#$&',
-                     spacesallowed=False)
-cvsdotcom = PasswordGen(minlen=10, maxlen=64, specials='/@$%&')
-delish = PasswordGen(minlen=8, uc=0, lc=0, letters=0)
-deltaskymiles = PasswordGen(minlen=8, maxlen=20,
-                            specials='`~!#$%^&*()-_=+[]{}\\|;:\'",./>?')
-disneyplus = PasswordGen(minlen=6, uc=0, lc=0, letters=0)
-dollarbank = PasswordGen(minlen=6, maxlen=10, uc=0, lc=0,
-                         specials='!@#$%&*_+-=?()', specialsqty=0)
-ezpass = PasswordGen(minlen=8, maxlen=64, specials='!@#$%*()-_+=~;,.')
-experian = PasswordGen(minlen=8, maxlen=35,
-                       specials='_@~!?#$^*+=:;,|/()&{}[\\.-')
-fandango = PasswordGen(minlen=8, uc=0, lc=0, maxrun=3)
-fcccores = PasswordGen(minlen=12, maxlen=15,
-                       specials='@%+=/\'"!#$^?:;,(){}[]~`-_*&<>\\|.')
-fidelitydotcom = PasswordGen(minlen=6, maxlen=20, uc=0, lc=0, letters=0,
-                             num=0, specials='`~!@$%^()-_=+\\|;:",./?')
-gofundme = PasswordGen(minlen=12)
-goodhousekeeping = PasswordGen(minlen=8, uc=0, lc=0, letters=0)
-guardianprotection_billing = PasswordGen(minlen=7, specialsqty=0)
-guardianprotection_app = PasswordGen(minlen=10, uc=0, lc=0)
-harvardbusinessreview = PasswordGen(minlen=8, specials='@!#$%^&+=')
-hertzgoldplusrewards = PasswordGen(minlen=8, specials='#$%^&')
-hhskeystoneid = PasswordGen(minlen=8, maxlen=14, num=0, specials='@&*%$^')
-highmark = PasswordGen(minlen=12, specials='`~!@#$%^&*()-_=[]{}\\|;:\'",./?')
-highmarkbcbssecuremsgctr = PasswordGen(minlen=8, specialsqty=0)
-homedepot = PasswordGen(minlen=9)  # 3 of uc, lc, num, spec
-homeagaindotcom = PasswordGen(minlen=8)  # 3 of uc, lc, num, spec
-hotelsdotcom = PasswordGen(minlen=6, maxlen=20, uc=0, lc=0, letters=0,
-                           specialsqty=0)
-hotmail = PasswordGen(minlen=8)  # 2 of uc, lc, num, spec
-iddotme = PasswordGen(minlen=8, specialsqty=0)
-kraken = PasswordGen(minlen=8, uc=0, lc=0)
-laundryvalue = PasswordGen(specials='', specialsqty=0)
-loweshardware = PasswordGen(minlen=8, maxlen=128, uc=0, lc=0, specialsqty=0,
-                            maxrun=3)
-marriott = PasswordGen(minlen=8, maxlen=20, specials='$!#&@?%=_')
-meetupdotcom = PasswordGen(minlen=10)
-microsoft = PasswordGen(minlen=4, maxlen=127, uc=0, lc=0, letters=0,
-                        num=0, specialsqty=0)
-morganstanley = PasswordGen(minlen=8, maxlen=20, uc=0, lc=0,
-                            specialsqty=0, history=3)
-moveondotorg = PasswordGen(minlen=8, uc=0, lc=0, letters=0, num=0,
-                           specialsqty=0)
-mysocialsecurity = PasswordGen(minlen=8, maxlen=64,
-                               specials='!@#$%^&*')  # 1st char ltr or num
-mybosch = PasswordGen(minlen=8, specialsqty=0)
-mydisney = PasswordGen(minlen=6, uc=0, lc=0, letters=0)  # 1 of num | spec
-myequifax = PasswordGen(minlen=8, maxlen=20, specials='!@$*+-')
-mymedicaredotgov = PasswordGen(minlen=8, maxlen=16, uc=0, lc=0,
-                               specials='@!$%^*()', history=6)
-myprepaidcenter = PasswordGen(minlen=8, maxlen=20, specials='!@#$%&')
+# Mobile apps have a top-level domain of "app".
+
+pswdGens = {
+    'testbadrun': PasswordGen(
+        minlen=6, maxlen=10, maxrun=0),
+    'aaa.com': PasswordGen(
+        minlen=6, maxlen=31, uc=0, lc=0, specials='^-!@#{}~$_', specialsqty=0),
+    # Allegheny Alerts
+    'onsolve.net': PasswordGen(
+        minlen=8, uc=0, lc=0, letters=0, num=0,
+        specials='!@#$%^&*()', specialsqty=0),
+    'badlandsranch.com': PasswordGen(
+        minlen=8, specials='!&$%^*@'),
+    'bit.ly': PasswordGen(
+        minlen=6, uc=0, lc=0),
+    'breville.com': PasswordGen(
+        minlen=6, uc=0, lc=0, letters=0, specialsqty=0),
+    # ChatGPT
+    'openai.com': PasswordGen(
+        minlen=8, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+    'choicehotels.com': PasswordGen(
+        minlen=8, maxlen=44, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+    # Cisco Networking Academy
+    'netacad.com': PasswordGen(
+        minlen=8, history=3),
+    'citi.com': PasswordGen(
+        minlen=8, maxlen=64, uc=0, lc=0, maxrun=2,
+        specials='~`!@#$%^&*()_-\\/|', specialsqty=0),
+    'citizensbankonline.com': PasswordGen(
+        minlen=8, maxlen=24, uc=0, lc=0, spacesallowed=False,
+        specials='`~!@#$%^&*()-_=+[]{}|;:\',./<>?'),
+    'costco.com': PasswordGen(
+        minlen=8, maxlen=16, specials='!@#$&', spacesallowed=False),
+    'cvs.com': PasswordGen(
+        minlen=10, maxlen=64, specials='/@$%&'),
+    'delish.com': PasswordGen(
+        minlen=8, uc=0, lc=0, letters=0),
+    'delta.com': PasswordGen(
+        minlen=8, maxlen=20, specials='`~!#$%^&*()-_=+[]{}\\|;:\'",./>?'),
+    'disneyplus.com': PasswordGen(
+        minlen=6, uc=0, lc=0, letters=0),
+    'dollarbank.com': PasswordGen(
+        minlen=6, maxlen=10, uc=0, lc=0,
+        specials='!@#$%&*_+-=?()', specialsqty=0),
+    'e-zpassny.com': PasswordGen(
+        minlen=8, maxlen=64, specials='!@#$%*()-_+=~;,.'),
+    'experian.com': PasswordGen(
+        minlen=8, maxlen=35, specials='_@~!?#$^*+=:;,|/()&{}[\\.-'),
+    'fandango.com': PasswordGen(
+        minlen=8, uc=0, lc=0, maxrun=3),
+    # FCC Commission Registration System (CORES)
+    'fcc.gov': PasswordGen(
+        minlen=12, maxlen=15, specials='@%+=/\'"!#$^?:;,(){}[]~`-_*&<>\\|.'),
+    'fidelity.com': PasswordGen(
+        minlen=6, maxlen=20, uc=0, lc=0, letters=0, num=0,
+        specials='`~!@$%^()-_=+\\|;:",./?'),
+    'gofundme.com': PasswordGen(
+        minlen=12),
+    'goodhousekeeping.com': PasswordGen(
+        minlen=8, uc=0, lc=0, letters=0),
+    'guardianprotection.com': PasswordGen(
+        minlen=7, specialsqty=0),
+    'guardianprotection.app': PasswordGen(
+        minlen=10, uc=0, lc=0),
+    # Harvard Business Review
+    'hbr.org': PasswordGen(
+        minlen=8, specials='@!#$%^&+='),
+    'hertz.com': PasswordGen(
+        minlen=8, specials='#$%^&'),
+    # HHS Keystone ID (PA Child Abuse clearances)
+    'pa.us': PasswordGen(
+        minlen=8, maxlen=14, num=0, specials='@&*%$^'),
+    'highmarkbcbs.com': PasswordGen(
+        minlen=12, specials='`~!@#$%^&*()-_=[]{}\\|;:\'",./?'),
+    # Highmark BCBS Secure Msg Ctr
+    'customerfeed.com': PasswordGen(
+        minlen=8, specialsqty=0),
+    'homedepot.com': PasswordGen(
+        minlen=9),  # 3 of uc, lc, num, spec
+    # HomeAgain Pet Recovery - Ariel
+    'homeagain.com': PasswordGen(
+        minlen=8),  # 3 of uc, lc, num, spec
+    'hotels.com': PasswordGen(
+        minlen=6, maxlen=20, uc=0, lc=0, letters=0, specialsqty=0),
+    'hotmail.com': PasswordGen(
+        minlen=8),  # 2 of uc, lc, num, spec
+    # Microsoft outlook hotmail
+    'live.com': PasswordGen(
+        minlen=8),  # 2 of uc, lc, num, spec
+    # ID.me (IRS)
+    'id.me': PasswordGen(
+        minlen=8, specialsqty=0),
+    # ID.me (IRS)
+    'irs.gov': PasswordGen(
+        minlen=8, specialsqty=0),
+    'kraken.com': PasswordGen(
+        minlen=8, uc=0, lc=0),
+    'laundryvalue.app': PasswordGen(
+        specials='', specialsqty=0),
+    'lowes.com': PasswordGen(
+        minlen=8, maxlen=128, uc=0, lc=0, specialsqty=0, maxrun=3),
+    'marriott.com': PasswordGen(
+        minlen=8, maxlen=20, specials='$!#&@?%=_'),
+    'meetup.com': PasswordGen(
+        minlen=10),
+    # Microsoft account
+    'microsoft.com': PasswordGen(
+        minlen=4, maxlen=127, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+    'MorganStanleyClientServ.com': PasswordGen(
+        minlen=8, maxlen=20, uc=0, lc=0, specialsqty=0, history=3),
+    'moveon.org': PasswordGen(
+        minlen=8, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+    # my Social Security
+    'ssa.gov': PasswordGen(
+        minlen=8, maxlen=64, specials='!@#$%^&*'),  # 1st char ltr or num
+    'bosch-home.com': PasswordGen(
+        minlen=8, specialsqty=0),
+    'hulu.com': PasswordGen(
+        minlen=6, uc=0, lc=0, letters=0),  # 1 of num | spec
+    'myequifax.com': PasswordGen(
+        minlen=8, maxlen=20, specials='!@$*+-'),
+    'mymedicare.gov': PasswordGen(
+        minlen=8, maxlen=16, uc=0, lc=0, specials='@!$%^*()', history=6),
+    'myprepaidcenter.com': PasswordGen(
+        minlen=8, maxlen=20, specials='!@#$%&'),
+    }  # end pswdGens
 
 
 #   M A I N   C O D E
@@ -165,10 +237,12 @@ myprepaidcenter = PasswordGen(minlen=8, maxlen=20, specials='!@#$%&')
 normalExit = 0
 
 def selftest(args):
-    costcopswd = costco.genPassword()
-    print(costcopswd)
-    costcopswd = costco.genPassword(24)
-    print(costcopswd)
+    costcopswd = pswdGens['costco.com'].genPassword()
+    print(f'For costco.com (default preferred length):  {costcopswd}')
+    costcopswd2 = pswdGens['costco.com'].genPassword(24)
+    print(f'For costco.com (preferred length 24):       {costcopswd2}')
+    badrun = pswdGens['testbadrun'].genPassword(7, test=True)
+    print(f'For testbadrun (preferred length 7):        {badrun}')
     return normalExit
 
 if __name__ == '__main__':
