@@ -2,7 +2,7 @@
 '''Establish sets of rules for generating passwords.'''
 
 #   I M P O R T S
-import random  # choice(), shuffle()
+import random  # choice(), X-shuffle()-X
 import string  # ascii_uppercase, ascii_lowercase, ascii_letters, digits,
                #    punctuation
 import sys     # exit(), argv[]
@@ -20,13 +20,16 @@ class PasswordGen:
 
     #   M E T H O D S
 
-    def __init__(self, /, uc: int = 1, lc: int = 1, letters: int = 1,
+    def __init__(self, *, uc: int = 1, lc: int = 1, letters: int = 1,
                           num: int = 1,
 #                         specials: str = '`~!@#$%^&*()-_=+[]{}\\|;:\'",./<>?',
                           specials: str = string.punctuation,
                           specialsqty = 1, minlen: int = 8, maxlen: int = 999,
-                          maxrun: int | NoneType = None, history: int = 0,
-                          spacesallowed: bool = False):
+                          maxrun: int | NoneType = None,
+                          nofmgroups: tuple | NoneType = None,
+                          firstchar: tuple | NoneType = None,
+                          firstcharspecials: str | NoneType = None,
+                          history: int = 0, spacesallowed: bool = False):
         '''Initializer sets the types and quantities of required characters.
 
         If a site specifies a number of required letters, but not numbers of
@@ -49,6 +52,10 @@ class PasswordGen:
         self.minLen = minlen          # minimum allowable length of password
         self.maxLen = maxlen          # maximum allowable length of password
         self.maxRun = maxrun          # allowable consecutive same character
+        self.NofMgroups = nofmgroups  # req'r chars from n groups of m indicated
+        self.firstChar = firstchar    # restrict 1st char to chars in these grps
+        if firstcharspecials is None:
+            self.firstCharSpecials = specials  # allowed in first char
         self.history = history        # pswd cannot match last n passwords
 #       self.spacesAllowed = spacesallowed
         self.allChars = (string.ascii_letters
@@ -67,25 +74,63 @@ class PasswordGen:
                 shuffled += charsList.pop(random.randint(0, len(charsList)-1))
             return shuffled
 
-        charTypes = ((string.ascii_uppercase, self.uc),
-                     (string.ascii_lowercase, self.lc),
-                     (string.ascii_letters, self.letters - self.uc - self.lc),
-                     (string.digits, self.num),
-                     (self.specials, self.specialsQty),
-                    )
+        firstChrTypes = {'uc':   string.ascii_uppercase,
+                         'lc':   string.ascii_lowercase,
+                         'num':  string.digits,
+                         'spec': self.firstCharSpecials,
+                        }  # end firstChrTypes
+        adjUc = self.uc
+        adjLc = self.lc
+        adjLtrs = self.letters
+        adjNum = self.num
+        adjSpecQty = self.specialsQty
+        if self.firstChar is None:  # are there 1st char restrictions?
+            firstCharacter = ''
+            adjMinLen = self.minLen
+            adjMaxLen = self.maxLen
+            adjPrefLen = preferredlen
+        else:                       # yes
+            adjMinLen = self.minLen - 1
+            adjMaxLen = self.maxLen - 1
+            adjPrefLen = preferredlen - 1
         runsAcceptable = False
         while not runsAcceptable:
+            if self.firstChar is not None:  # are there 1st char restrictions?
+                firstChrAllowed = ''
+                try:
+                    for grp in self.firstChar:
+                        firstChrAllowed += firstChrTypes[grp]
+                except KeyError:
+                    raise UserError(f'Illegal 1st char group name "{grp}".')
+                firstCharacter = random.choice(firstChrAllowed)
+                if firstCharacter in string.ascii_letters:
+                    adjLtrs -= 1
+                if firstCharacter in string.ascii_uppercase:
+                    adjUc -= 1
+                elif firstCharacter in string.ascii_lowercase:
+                    adjLc -= 1
+                elif firstCharacter in string.digits:
+                    adjNum -= 1
+                elif firstCharacter in self.specials:
+                    adjSpecQty -= 1
+            charTypeMins = ((string.ascii_uppercase, adjUc),
+                            (string.ascii_lowercase, adjLc),
+                            (string.ascii_letters, adjLtrs - adjUc - adjLc),
+                            (string.digits, adjNum),
+                            (self.specials, adjSpecQty),
+                           )
+
             password = ''
             # Choose required quantity of characters of required types
-            for (chars, qty) in charTypes:
+            for (chars, qty) in charTypeMins:
                 for n in range(qty):
                     password += random.choice(chars)
             # Choose additional characters to reach password's target length
-            for n in range(max(self.minLen,
-                               min(self.maxLen, preferredlen))
+            for n in range(max(adjMinLen,
+                               min(adjMaxLen, adjPrefLen))
                            - len(password)):
                 password += random.choice(self.allChars)
-
+            password = firstCharacter + shuffle(password)
             # Check for illegally long runs of same character
             if self.maxRun is None:
                 runsAcceptable = True
@@ -109,10 +154,12 @@ class PasswordGen:
 pswdGens = {
     'testbadrun': PasswordGen(
         minlen=6, maxlen=10, maxrun=0),
+    'testbad1stchar': PasswordGen(  # my Social Security
+        minlen=8, maxlen=64, specials='!@#$%^&*',
+        firstchar=('uc', 'lc', 'num', 'junk')),
     'aaa.com': PasswordGen(
         minlen=6, maxlen=31, uc=0, lc=0, specials='^-!@#{}~$_', specialsqty=0),
-    # Allegheny Alerts
-    'onsolve.net': PasswordGen(
+    'onsolve.net': PasswordGen(  # Allegheny Alerts
         minlen=8, uc=0, lc=0, letters=0, num=0,
         specials='!@#$%^&*()', specialsqty=0),
     'badlandsranch.com': PasswordGen(
@@ -121,13 +168,11 @@ pswdGens = {
         minlen=6, uc=0, lc=0),
     'breville.com': PasswordGen(
         minlen=6, uc=0, lc=0, letters=0, specialsqty=0),
-    # ChatGPT
-    'openai.com': PasswordGen(
+    'openai.com': PasswordGen(  # ChatGPT
         minlen=8, uc=0, lc=0, letters=0, num=0, specialsqty=0),
     'choicehotels.com': PasswordGen(
         minlen=8, maxlen=44, uc=0, lc=0, letters=0, num=0, specialsqty=0),
-    # Cisco Networking Academy
-    'netacad.com': PasswordGen(
+    'netacad.com': PasswordGen(  # Cisco Networking Academy
         minlen=8, history=3),
     'citi.com': PasswordGen(
         minlen=8, maxlen=64, uc=0, lc=0, maxrun=2,
@@ -154,11 +199,10 @@ pswdGens = {
         minlen=8, maxlen=35, specials='_@~!?#$^*+=:;,|/()&{}[\\.-'),
     'fandango.com': PasswordGen(
         minlen=8, uc=0, lc=0, maxrun=3),
-    # FCC Commission Registration System (CORES)
-    'fcc.gov': PasswordGen(
+    'fcc.gov': PasswordGen(  # FCC Commission Registration System (CORES)
         minlen=12, maxlen=15, specials='@%+=/\'"!#$^?:;,(){}[]~`-_*&<>\\|.'),
     'fidelity.com': PasswordGen(
-        minlen=6, maxlen=20, uc=0, lc=0, letters=0, num=0,
+        minlen=6, maxlen=20, uc=0, lc=0, letters=2, num=0,
         specials='`~!@$%^()-_=+\\|;:",./?'),
     'gofundme.com': PasswordGen(
         minlen=12),
@@ -168,36 +212,29 @@ pswdGens = {
         minlen=7, specialsqty=0),
     'guardianprotection.app': PasswordGen(
         minlen=10, uc=0, lc=0),
-    # Harvard Business Review
-    'hbr.org': PasswordGen(
+    'hbr.org': PasswordGen(  # Harvard Business Review
         minlen=8, specials='@!#$%^&+='),
     'hertz.com': PasswordGen(
         minlen=8, specials='#$%^&'),
-    # HHS Keystone ID (PA Child Abuse clearances)
-    'pa.us': PasswordGen(
+    'pa.us': PasswordGen(  # HHS Keystone ID (PA Child Abuse clearances)
         minlen=8, maxlen=14, num=0, specials='@&*%$^'),
     'highmarkbcbs.com': PasswordGen(
         minlen=12, specials='`~!@#$%^&*()-_=[]{}\\|;:\'",./?'),
-    # Highmark BCBS Secure Msg Ctr
-    'customerfeed.com': PasswordGen(
+    'customerfeed.com': PasswordGen(  # Highmark BCBS Secure Msg Ctr
         minlen=8, specialsqty=0),
     'homedepot.com': PasswordGen(
         minlen=9),  # 3 of uc, lc, num, spec
-    # HomeAgain Pet Recovery - Ariel
-    'homeagain.com': PasswordGen(
+    'homeagain.com': PasswordGen(  # HomeAgain Pet Recovery
         minlen=8),  # 3 of uc, lc, num, spec
     'hotels.com': PasswordGen(
         minlen=6, maxlen=20, uc=0, lc=0, letters=0, specialsqty=0),
     'hotmail.com': PasswordGen(
         minlen=8),  # 2 of uc, lc, num, spec
-    # Microsoft outlook hotmail
-    'live.com': PasswordGen(
+    'live.com': PasswordGen(  # Microsoft outlook hotmail
         minlen=8),  # 2 of uc, lc, num, spec
-    # ID.me (IRS)
-    'id.me': PasswordGen(
+    'id.me': PasswordGen(  # ID.me (IRS)
         minlen=8, specialsqty=0),
-    # ID.me (IRS)
-    'irs.gov': PasswordGen(
+    'irs.gov': PasswordGen(  # ID.me (IRS)
         minlen=8, specialsqty=0),
     'kraken.com': PasswordGen(
         minlen=8, uc=0, lc=0),
@@ -209,16 +246,15 @@ pswdGens = {
         minlen=8, maxlen=20, specials='$!#&@?%=_'),
     'meetup.com': PasswordGen(
         minlen=10),
-    # Microsoft account
-    'microsoft.com': PasswordGen(
+    'microsoft.com': PasswordGen(  # Microsoft account
         minlen=4, maxlen=127, uc=0, lc=0, letters=0, num=0, specialsqty=0),
     'MorganStanleyClientServ.com': PasswordGen(
         minlen=8, maxlen=20, uc=0, lc=0, specialsqty=0, history=3),
     'moveon.org': PasswordGen(
         minlen=8, uc=0, lc=0, letters=0, num=0, specialsqty=0),
-    # my Social Security
-    'ssa.gov': PasswordGen(
-        minlen=8, maxlen=64, specials='!@#$%^&*'),  # 1st char ltr or num
+    'ssa.gov': PasswordGen(  # my Social Security
+        minlen=8, maxlen=64, specials='!@#$%^&*',
+        firstchar=('uc', 'lc', 'num')),
     'bosch-home.com': PasswordGen(
         minlen=8, specialsqty=0),
     'hulu.com': PasswordGen(
@@ -243,6 +279,10 @@ def selftest(args):
     print(f'For costco.com (preferred length 24):       {costcopswd2}')
     badrun = pswdGens['testbadrun'].genPassword(7, test=True)
     print(f'For testbadrun (preferred length 7):        {badrun}')
+    ssapswd = pswdGens['ssa.gov'].genPassword()
+    print(f'For ssa.gov (1st char must be ltr or num):  {ssapswd}')
+    bad1stcharpswd = pswdGens['testbad1stchar'].genPassword()
+    print(f'For bad1stcharpswd (default preferred length):  {bad1stcharpswd}')
     return normalExit
 
 if __name__ == '__main__':
