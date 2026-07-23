@@ -24,7 +24,7 @@ from exceptions import *  # additional Exceptions: UserError, ProgrammerError
 
 # = = = = =   C O N S T A N T S   = = = = =
 
-_maxRandom = 2 ** 32  # Largest permissible value of recID + 1
+_MAXRANDOM = 2 ** 32  # Largest permissible value of recID + 1
 
 
 # = = = = =   M O D U L E   V A R I A B L E S   = = = = =
@@ -55,9 +55,9 @@ def _genRecID(db) -> int:
     instead as the recID.
     '''
 
-    id = random.randrange(_maxRandom)
+    id = random.randrange(_MAXRANDOM)
     while id in db:
-        id = random.randrange(_maxRandom)
+        id = random.randrange(_MAXRANDOM)
     _add_id_to_db(id)
     return id
 
@@ -80,6 +80,8 @@ class TimeStamp:
     #   V A R I A B L E S
     tsformat = '%Y/%m/%d %H:%M:%S'
     GMT = False
+
+    #   M E T H O D S
 
     def __init__(self, timeValue: float = None):
         '''Initialize new TimeStamp instance.
@@ -250,7 +252,10 @@ class Field:
     '''Field class contains the value of one field in a record
     '''
 
+    #   C O N S T A N T S
     titleLabel = 'Title'  # the key for the title field
+
+    #   M E T H O D S
 
     def _setValue(self, value: str, *,
                         setmodtime: bool = True):
@@ -353,6 +358,8 @@ class Field:
 class _RecIter:
     '''Create an iterator object for iterating through the Fields in a Rec.
     '''
+
+    #   M E T H O D S
 
     def __init__(self, rec: MPrec):
         '''Initialize an iterator object for stepping
@@ -616,12 +623,16 @@ class MPrec:
         self.validateTimeStamp(now)
         pos = self._addToFieldsByPos(Field(label, value, masked=masked))
         self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
         return pos
 
-    def _getFieldPosArg(self, *, pos:   int | None = None,
+    def _getFieldPosArg(self, start: int = 1,
+                              *, pos:   int | None = None,
                                  label: str | None = None) -> int:
         '''Returns the position of`an existing Field in a MPrec,
         located either by display-position (pos), or by Field label.
+        Label may have an asterisk at the beginning, the end, or both,
+        denoting wildcards.
         If locating via label and it isn't found, ValueError is
         raised [by method "index"].
         '''
@@ -639,10 +650,10 @@ class MPrec:
         if pos is not None and label is not None:
             raise ProgrammerError(f'You cannot specify both "pos" and "label"'
                                   f' arguments in call to {callingMethodName}.')
-        if pos is None:
-            pos = 0
+        if pos is None:  # search by field label
+            pos = start
             if label[0] == '*' and label[-1] == '*':  # contains
-                for fld in self.fieldsByPos:
+                for fld in self.fieldsByPos[start:]:  # can we omit .fieldsByPos ?
                     if label in fld.label:
                         break
                     else:
@@ -652,7 +663,7 @@ class MPrec:
                                      f' "{fieldLabel}" in'
                                      f' record "{self[self.titlePos].value}".')
             elif label[0] == '*':                     # ends with
-                for fld in self.fieldsByPos:
+                for fld in self.fieldsByPos[start:]:  # can we omit .fieldsByPos ?
                     if fld.label.endswith(label):
                         break
                     else:
@@ -662,7 +673,7 @@ class MPrec:
                                      f' "{fieldLabel}" in'
                                      f' record "{self[self.titlePos].value}".')
             elif label[-1] == '*':                    # starts with
-                for fld in self.fieldsByPos:
+                for fld in self.fieldsByPos[start:]:  # can we omit .fieldsByPos ?
                     if fld.label.startswith(label):
                         break
                     else:
@@ -671,8 +682,8 @@ class MPrec:
                     raise ValueError(f'There is no field label starting with'
                                      f' "{fieldLabel}" in'
                                      f' record "{self[self.titlePos].value}".')
-            else:
-                pos = self.index(label)  # raises ValueError if label not found
+            else:  # search for field by complete and exact match of label.
+                pos = self.index(label, start=start)  # raises ValueError if label not found
         return pos
 
     def getField(self, *, pos:   int | None = None,
