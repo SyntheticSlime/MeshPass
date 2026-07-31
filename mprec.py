@@ -10,6 +10,7 @@
 
 # = = = = =   B U I L T I N   M O D U L E S   = = = = =
 
+import pickle    # dump(), load()
 import random    # randrange()
 import sys       # exit(), argv[]
 import time      # time(), ctime(), sleep()
@@ -20,33 +21,25 @@ from inspect import getframeinfo, currentframe  # used in _getFieldPosArg
 # = = = = =   H O M E - G R O W N   M O D U L E S   = = = = =
 
 from exceptions import *  # additional Exceptions: UserError, ProgrammerError
+from recTemplates_en_us import *  # recTemplates
 
 
 # = = = = =   C O N S T A N T S   = = = = =
 
-_MAXRANDOM = 2 ** 32  # Largest permissible value of recID + 1
+_MAXRECID = 2 ** 32  # Largest permissible value of recID + 1
 
 
 # = = = = =   M O D U L E   V A R I A B L E S   = = = = =
-
-_db = []  # development db of recIDs. Not persistent. Should be.
+_allRecIDs = []
+db = {}  # db of MPrecs. - Key=title, Value = (recID, MPrec)
 
 
 # = = = = =   F U N C T I O N S   = = = = =
 
-#def _timeStamp() -> float:
-#    '''_timeStamp returns a timestamp for records and fields
-#    '''
-#
-#    return time.time()  # floating-point seconds since 1/1/1970 00:00:00 UTC
+def _compileAllRecIDs():
+    pass
 
-#def time2str(timeValue: float) -> str:
-#    '''Convert a Field or Rec timestamp to a readable string.
-#    '''
-#
-#    return time.ctime(timeValue)
-
-def _genRecID(db) -> int:
+def _genRecID() -> int:
     '''Generate random number for recID.
 
     Uses random numbers so devices belonging to same user can both
@@ -55,19 +48,43 @@ def _genRecID(db) -> int:
     instead as the recID.
     '''
 
-    id = random.randrange(_MAXRANDOM)
-    while id in db:
-        id = random.randrange(_MAXRANDOM)
-    _add_id_to_db(id)
+    id = random.randrange(_MAXRECID)
+    while id in _allRecIDs:
+        id = random.randrange(_MAXRECID)
+    _allRecIDs.append(id)
     return id
 
-def _add_id_to_db(id: int):
-    '''Store of recIDs in MeshPass db.
+def makeRecord(title: str, template: str | NoneType = None) -> MPrec:
+    if title in (rectuple[0] for rectuple in db.values()):
+        raise UserError(f'Duplicate record title {title}')
+    rec = MPrec(title, template)
+    if template in recTemplates:
+        for field in recTemplates[template]:
+            if isinstance(field, fldTmplt):
+                rec.addField(field.label, '', masked=field.masked,
+                                              share=field.share,
+                                              phone=field.phone,
+                                              mapaddr=field.mapAddr,
+                                              email=field.email,
+                                              url=field.url)
+            else:
+                label = field
+                (masked, share, phone, mapAddr, email, url
+                    ) = classifyAll(label)
+                rec.addField(label, '', masked=masked, share=share,
+                                        phone=phone, mapaddr=mapAddr,
+                                        email=email, url=url)
+    db[title] = (rec.id, rec)
+    return rec
 
-    Should be persistent.  Isn't yet.
-    '''
+def saveDB(filepath: str):
+    with open(filepath, 'wb') as dbout:
+        pickle.dump(db, dbout)
 
-    _db.append(id)  # need a persistent store. This isn't it.
+def loadDB(filepath: str) -> dict:
+    with open(filepath, 'rb') as dbin:
+        db = pickle.load(dbin)
+    return db
 
 
 # = = = = =   C L A S S E S   = = = = =
@@ -325,7 +342,58 @@ class Field:
 
         return self.masked
 
-    def __init__(self, label: str, value: str, masked: bool = False):
+    def _setShare(self, share: bool, *,
+                        setmodtime: bool = True):
+        self.share = bool(share)
+        if setmodtime:
+            self._setModTime(ModTimeStamp())
+
+    def _getShare(self) -> bool:
+        return self.share
+
+    def _setPhone(self, phone: bool, *,
+                        setmodtime: bool = True):
+        self.phone = bool(phone)
+        if setmodtime:
+            self._setModTime(ModTimeStamp())
+
+    def _getPhone(self) -> bool:
+        return self.phone
+
+    def _setMapAddr(self, mapaddr: bool, *,
+                        setmodtime: bool = True):
+        self.mapAddr = bool(mapaddr)
+        if setmodtime:
+            self._setModTime(ModTimeStamp())
+
+    def _getMapAddr(self) -> bool:
+        return self.mapAddr
+
+    def _setEmail(self, email: bool, *,
+                        setmodtime: bool = True):
+        self.email = bool(email)
+        if setmodtime:
+            self._setModTime(ModTimeStamp())
+
+    def _getEmail(self) -> bool:
+        return self.email
+
+    def _setURL(self, url: bool, *,
+                      setmodtime: bool = True):
+        self.url = bool(url)
+        if setmodtime:
+            self._setModTime(ModTimeStamp())
+
+    def _getURL(self) -> bool:
+        return self.url
+
+    def __init__(self, label: str, value: str, *,
+                                               masked:  bool = False,
+                                               share:   bool = True,
+                                               phone:   bool = False,
+                                               mapaddr: bool = False,
+                                               email:   bool = False,
+                                               url:     bool = False):
         '''Initializer for Field class
         '''
 
@@ -338,6 +406,11 @@ class Field:
         self._setLabel(label, setmodtime=False)
         self._setValue(value, setmodtime=False)
         self._setMask(masked, setmodtime=False)
+        self._setShare(share, setmodtime=False)
+        self._setPhone(phone, setmodtime=False)
+        self._setMapAddr(mapaddr, setmodtime=False)
+        self._setEmail(email, setmodtime=False)
+        self._setURL(url, setmodtime=False)
         now = ModTimeStamp()
         self._setModTime(now)
 
@@ -482,6 +555,9 @@ class MPrec:
 
         assert isinstance(field, Field), ('Rec.__setitem__ argument must'
                                           ' be a Field instance')
+        if pos == self.titlePos and field._getLabel() != Field.titleLabel:
+            raise ProgrammerError(f'Cannot replace a title field with a'
+                                  f'non-title field - {field._getLabel()}')
         if pos == len(self.fieldsByPos):
             self.fieldsByPos.append(field)
         else:
@@ -491,6 +567,8 @@ class MPrec:
         '''Delete a Field from an MPrec by display-position.
         '''
 
+        if pos == self.titlePos:
+            raise ProgrammerError('Cannot delete the title field')
         del self.fieldsByPos[pos]
 
     def __iter__(self) -> _RecIter:
@@ -582,17 +660,18 @@ class MPrec:
         # deletion, and the Field position before deletion.
         self._deletedFields = []
 
-    def __init__(self, title: str):
+    def __init__(self, title: str, template: str | NoneType = None):
         '''Initializer for MPrec class
         '''
 
         self.version = MPrec.pgmRecVersion
-        self.id = _genRecID(_db)
+        self.id = _genRecID()
         self._initFieldsByPos()
         self._initDeletedFields()
         pos = self.addField(self.titleLabel, title)
         assert pos == self.titlePos, ('The title Field of a'
                                       ' record must be Field zero')
+        self.template = template
         modTime = self[pos]._getModTime()
         self.createTime = CreationTimeStamp(modTime)
         self._setRecModTime(modTime)
@@ -606,7 +685,14 @@ class MPrec:
         self.fieldsByPos.append(field)
         return len(self.fieldsByPos) - 1  # position of appended Field in MPrec
 
-    def addField(self, label: str, value: str, masked: bool = False) -> int:
+    def addField(self, label: str, value: str, *,
+                                               masked:  bool | NoneType = None,
+                                               share:   bool | NoneType = None,
+                                               phone:   bool | NoneType = None,
+                                               mapaddr: bool | NoneType = None,
+                                               email:   bool | NoneType = None,
+                                               url:     bool | NoneType = None
+                ) -> int:
         '''Create a new Field and add it to a MPrec.
         Return the new Field's display position.
         '''
@@ -621,7 +707,20 @@ class MPrec:
             raise UserError(f'Record already has a field labeled "{label}"')
         now = ModTimeStamp()
         self.validateTimeStamp(now)
-        pos = self._addToFieldsByPos(Field(label, value, masked=masked))
+        (auto_masked, auto_share, auto_phone, auto_mapaddr, auto_email, auto_url
+            ) = classifyAll(label)
+        if masked  is None: masked  = auto_masked
+        if share   is None: share   = auto_share
+        if phone   is None: phone   = auto_phone
+        if mapaddr is None: mapaddr = auto_mapaddr
+        if email   is None: email   = auto_email
+        if url     is None: url     = auto_url
+        pos = self._addToFieldsByPos(Field(label, value, masked=masked,
+                                                         share=share,
+                                                         phone=phone,
+                                                         mapaddr=mapaddr,
+                                                         email=email,
+                                                         url=url))
         self._setModTimes(now, pos=pos)  # set Field and Record modTimes
         self.newerRecord(now)
         return pos
@@ -704,6 +803,9 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
         assert isinstance(field, Field), ('Rec._setField argument must'
                                           ' be a Field instance')
+        if pos == self.titlePos and field._getLabel() != Field.titleLabel:
+            raise ProgrammerError(f'Cannot replace a title field with a'
+                                  f'non-title field - {field._getLabel()}')
         self[pos] = field
         now = ModTimeStamp()
         self._setRecModTime(now)
@@ -731,6 +833,12 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
         field = self[pos]
         return field._getValue()
+
+    def setTitle(self, title: str):
+        self[self.titlePos] = title
+
+    def getTitle(self) -> str:
+        return self[self.titlePos]
 
     def setFieldLabel(self, newlabel: str, *, pos:      int | None = None,
                                               oldlabel: str | None = None):
@@ -782,17 +890,112 @@ class MPrec:
         pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
         return self[pos]._getMask()
 
-#   def _setFieldModTime(self, timeValue: float,
-#                              *, pos:       int | None = None,
-#                                 label:     str | None = None):
-#       '''Sets the modTime of a Field, located
-#       either by display-position (pos), or by Field label.
-#       '''
+    def setFieldShare(self, share: bool,
+                            *, pos:   int | None = None,
+                               label: str | None = None):
+        '''Change whether a Field will be shared when
+           its rec is synced with another user.
+        '''
 
-#       pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError possible
-#       field = self[pos]
-#       field._setModTime(timeValue)
-#       self._setRecModTime(timeValue)
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        if pos != self.titlePos:
+            self[pos]._setShare(bool(share))
+        now = ModTimeStamp()
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
+
+    def getFieldShare(self, *, pos:   int | None = None,
+                               label: str | None = None) -> bool:
+        '''Retrieve Boolean for whether a Field will be shared when
+           its rec is synced with another user.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        return self[pos]._getShare()
+
+    def setFieldPhone(self, phone: bool,
+                            *, pos:   int | None = None,
+                               label: str | None = None):
+        '''Change whether a Field will have a "call phone" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        if pos != self.titlePos:
+            self[pos]._setPhone(bool(phone))
+        now = ModTimeStamp()
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
+
+    def getFieldPhone(self, *, pos:   int | None = None,
+                               label: str | None = None) -> bool:
+        '''Retrieve Boolean for whether a Field will have a "call phone" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        return self[pos]._getPhone()
+
+    def setFieldMapAddr(self, mapaddr: bool,
+                              *, pos:   int | None = None,
+                                 label: str | None = None):
+        '''Change whether a Field will have a "map address" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        if pos != self.titlePos:
+            self[pos]._setMapAddr(bool(mapaddr))
+        now = ModTimeStamp()
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
+
+    def getFieldMapAddr(self, *, pos:   int | None = None,
+                                 label: str | None = None) -> bool:
+        '''Retrieve Boolean for whether a Field will have a "map address" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        return self[pos]._getMapAddr()
+
+    def setFieldEmail(self, email: bool,
+                            *, pos:   int | None = None,
+                               label: str | None = None):
+        '''Change whether a Field will have a "compose email" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        if pos != self.titlePos:
+            self[pos]._setEmail(bool(email))
+        now = ModTimeStamp()
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
+
+    def getFieldEmail(self, *, pos:   int | None = None,
+                               label: str | None = None) -> bool:
+        '''Retrieve Boolean for whether a Field will have a "compose email" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        return self[pos]._getEmail()
+
+    def setFieldURL(self, url: bool,
+                          *, pos:   int | None = None,
+                             label: str | None = None):
+        '''Change whether a Field will have a "open URL" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        if pos != self.titlePos:
+            self[pos]._setURL(bool(url))
+        now = ModTimeStamp()
+        self._setModTimes(now, pos=pos)  # set Field and Record modTimes
+        self.newerRecord(now)
+
+    def getFieldURL(self, *, pos:   int | None = None,
+                             label: str | None = None) -> bool:
+        '''Retrieve Boolean for whether a Field will have a "open URL" button.
+        '''
+
+        pos = self._getFieldPosArg(pos=pos, label=label)  # ValueError posibl
+        return self[pos]._getURL()
 
     def _setModTimes(self, tstamp: TimeStamp,
                            *, pos:       int | None = None,
@@ -878,14 +1081,14 @@ class MPrec:
             try:
                 field, modTime, origPos = self._deletedFields.pop()
             except IndexError:
-                warnings.warn('There are no undeleted Fields to undelete.')
+                warnings.warn('There are no deleted Fields to undelete.')
                 return False
         else:              # undelete specified Field
             try:
                 pos = [fld.label for (fld, _, _)
                        in self._deletedFields   ].index(label)
             except ValueError:
-                warnings.warn(f'There is no deleted Field with title "{label}"')
+                warnings.warn(f'There is no deleted Field with label "{label}"')
                 return False
             field, modTime, origPos = self._deletedFields.pop(pos)
         if force or label not in self:
@@ -908,7 +1111,7 @@ class MPrec:
         '''Format the MPrec instance as a string for developers
         '''
 
-        result = self[self.titlePos]._getValue()
+        result = '\n' + self[self.titlePos]._getValue()
         for field in self.fieldsByPos[self.titlePos+1:]:
             result += (f' \n  {field._getLabel()}: '
                        f'{field._getValue()}')
@@ -925,8 +1128,18 @@ def _selfTest(args: list[str]) -> int:
     Runs if this module is run as a program, not imported.
     '''
 
+    # The "nopause" option allows us to bypass the user prompt that waits
+    # for the user to read the program output.  Making it the default to
+    # pause allows us to run the module by double-clicking
+    # the filename in Windows File Manager
+    if len(args) >= 1:
+        noPause = args[0].lower() == 'nopause'
+    else:
+        noPause = False
+
     print('New record')
-    r1 = MPrec('Ron')
+#   r1 = MPrec('Ron')
+    r1 = makeRecord('Ron')
     print(f'RecID = {r1.id}')
     print(f'recCreateTime = {r1.createTime}')
     print()
@@ -1072,9 +1285,18 @@ def _selfTest(args: list[str]) -> int:
         print(field.label, field.value, field._getModTime())
 
     print('\nIDs in DB:')
-    for id in _db:
-        print(id)
+    for recTuple in db.values():
+        print(recTuple)
+
+
+    if not noPause:
+        try:
+            input('\nPausing so user can read output.'
+                  '  Press "Enter" when ready. ')
+        except EOFError:
+            pass
+
     return normalExit  # to OS (sys.exit)
 
 if __name__ == '__main__':
-    sys.exit(_selfTest(sys.argv[1:]))
+    sys.exit(_selfTest(sys.argv[1:]))  # skip module filename
