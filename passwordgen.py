@@ -2,7 +2,7 @@
 '''Establish sets of rules for generating passwords.'''
 
 #   I M P O R T S
-import random    # choice(), randint(), X-shuffle()-X
+import random    # choice(), randint(), X- shuffle()-X
 import string    # ascii_uppercase, ascii_lowercase, ascii_letters, digits,
                  #    punctuation
 import sys       # exit(), argv[]
@@ -21,11 +21,11 @@ class PasswordGen:
 
     #   M E T H O D S
 
-    def __init__(self, *, uc: int = 1, lc: int = 1, letters: int = 1,
-                          num: int = 1,
+    def __init__(self, *, uc: int = 0, lc: int = 0, letters: int = 0,
+                          num: int = 0,
 #                         specials: str = '`~!@#$%^&*()-_=+[]{}\\|;:\'",./<>?',
                           specials: str = string.punctuation,
-                          specialsqty = 1, minlen: int = 8, maxlen: int = 999,
+                          specialsqty = 0, minlen: int = 12, maxlen: int = 63,
                           maxrun: int | NoneType = None,
                           n_of_m_groups: tuple | NoneType = None,
                           firstchar: tuple | NoneType = None,
@@ -68,16 +68,46 @@ class PasswordGen:
                          + specials
                          + (' ' if spacesallowed else '')
                         )
+        requiredlen = max(uc + lc, letters) + num + specialsqty # more later?
         if n_of_m_groups is not None:
             if not isinstance(n_of_m_groups[0], int):
                 raise UserError(f'1st element of n_of_m_groups'
                                 f' "{n_of_m_groups[0]}" must be an integer')
             groups = n_of_m_groups[1:]
+            if len(groups) <= n_of_m_groups[0]:
+                raise UserError(f'The number of groups ({len(groups)}) is not'
+                                f'  greater than the # of required groups'
+                                f'({n_of_m_groups[0]}).')
+            for grp in groups:
+                if grp not in ('uc', 'lc', 'ltrs', 'num', 'spec'):
+                    raise UserError(f'Unknown group "{grp}" in N-of-M groups.')
             if ('ltrs' in groups
                 and ('uc' in groups
                      or 'lc' in groups)):
                 raise UserError('In n_of_m_groups cannot have "ltrs" together'
                                 ' with "uc" or "lc".')
+            if 'ltrs' in groups and (uc > 0 or lc > 0 or letters > 0):
+                raise UserError('When "ltrs" is in an N-of-M group,'
+                                'uc, lc, and letters must be zero.')
+            if 'uc' in groups and uc > 0:
+                raise UserError('When "uc" is in an N-of-M group,'
+                                'uc must be zero.')
+            if 'lc' in groups and lc > 0:
+                raise UserError('When "lc" is in an N-of-M group,'
+                                'lc must be zero.')
+            if 'num' in groups and num > 0:
+                raise UserError('When "unumc" is in an N-of-M group,'
+                                'num must be zero.')
+            if 'spec' in groups and specialsqty > 0:
+                raise UserError('When "spec" is in an N-of-M group,'
+                                'specialsqty must be zero.')
+            requiredlen += n_of_m_groups[0]  # number of required groups
+        if requiredlen > maxlen:
+            raise UserError('Required length exceeds maximum length.')
+        if requiredlen > minlen:
+            warnings.warn(f'Minimum length ({minlen}) adjusted'
+                          f' to required length ({requiredlen})')
+            self.minlen = minlen = requiredlen
 
     def genPassword(self, preferredlen: int = 12,
                           *, test=False, fill=False) -> str | NoneType:
@@ -210,119 +240,136 @@ class PasswordGen:
 
 pswdGens = {
     'aaa.com': PasswordGen(
-        minlen=6, maxlen=31, uc=0, lc=0, specials='^-!@#{}~$_', specialsqty=0),
+        minlen=6, maxlen=31, num=1, letters=1,
+        specials='^-!@#{}~$_', specialsqty=0),
     'badlandsranch.com': PasswordGen(
-        minlen=8, specials='!&$%^*@'),
+        minlen=8, uc=1, lc=1, num=1, specialsqty=1, specials='!&$%^*@'),
     'bit.ly': PasswordGen(
-        minlen=6, uc=0, lc=0),
+        minlen=6, letters=1, num=1, specialsqty=1),
     'bosch-home.com': PasswordGen(
-        minlen=8, specialsqty=0),
+        minlen=8, uc=1, lc=1, num=1),
     'breville.com': PasswordGen(
-        minlen=6, uc=0, lc=0, letters=0, specialsqty=0),
+        minlen=6, num=1),
     'choicehotels.com': PasswordGen(
-        minlen=8, maxlen=44, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+        minlen=8, maxlen=44, specialsqty=1, history=0),  # all specials OK
     'citi.com': PasswordGen(
-        minlen=8, maxlen=64, uc=0, lc=0, maxrun=2,
+        minlen=8, maxlen=64, letters=1, num=1, maxrun=2,
         specials='~`!@#$%^&*()_-\\/|', specialsqty=0),
     'citizensbankonline.com': PasswordGen(
-        minlen=8, maxlen=24, uc=0, lc=0, spacesallowed=False,
+        minlen=8, maxlen=24, letters=1, num=1, spacesallowed=False,
         specials='`~!@#$%^&*()-_=+[]{}|;:\',./<>?'),
     'costco.com': PasswordGen(
-        minlen=8, maxlen=16, specials='!@#$&', spacesallowed=False),
-    'culturaldistrict.org': PasswordGen(
+        minlen=8, maxlen=16, uc=1, lc=1, num=1, specialsqty=1,
+        specials='!@#$&', spacesallowed=False),  # no < >
+    'culturaldistrict.org': PasswordGen(  # Pgh Cultural District
         minlen=8, uc=1, num=1, specialsqty=1),
     'customerfeed.com': PasswordGen(  # Highmark BCBS Secure Msg Ctr
-        minlen=8, specialsqty=0),
+        minlen=8, uc=1, lc=1, num=1),
     'cvs.com': PasswordGen(
-        minlen=10, maxlen=64, specials='/@$%&'),
+        minlen=10, maxlen=64, uc=1, lc=1, num=1, specialsqty=1,
+        specials='/@$%&'),
     'delish.com': PasswordGen(
-        minlen=8, uc=0, lc=0, letters=0),
+        minlen=8, num=1, specialsqty=1),
     'delta.com': PasswordGen(
-        minlen=8, maxlen=20, specials='`~!#$%^&*()-_=+[]{}\\|;:\'",./>?'),
+        minlen=8, maxlen=20, uc=1, lc=1, num=1,  # max 3 specials
+        specials='`~!#$%^&*()-_=+[]{}\\|;:\'",./>?'),
     'disneyplus.com': PasswordGen(
-        minlen=6, uc=0, lc=0, letters=0),
+        minlen=6, n_of_m_groups=(1, 'num', 'spec')),
     'dollarbank.com': PasswordGen(
-        minlen=6, maxlen=10, uc=0, lc=0,
+        minlen=6, maxlen=10, letters=1, num=1,  # case insensitive
         specials='!@#$%&*_+-=?()', specialsqty=0),
     'e-zpassny.com': PasswordGen(
-        minlen=8, maxlen=64, specials='!@#$%*()-_+=~;,.'),
+        minlen=8, maxlen=64, uc=1, lc=1, num=1, specialsqty=1,
+        specials='!@#$%*()-_+=~;,.'),
     'experian.com': PasswordGen(
-        minlen=8, maxlen=35, specials='_@~!?#$^*+=:;,|/()&{}[\\.-'),
+        minlen=8, maxlen=35, uc=1, lc=1, num=1, specialsqty=1,
+        specials='_@~!?#$^*+=:;,|/()&{}[\\.-'),
     'fandango.com': PasswordGen(
-        minlen=8, uc=0, lc=0, maxrun=3),
+        minlen=8, lc=1, num=1, spacesallowed=False),  # maxrun=3 ?
     'fcc.gov': PasswordGen(  # FCC Commission Registration System (CORES)
-        minlen=12, maxlen=15, specials='@%+=/\'"!#$^?:;,(){}[]~`-_*&<>\\|.'),
+        minlen=12, maxlen=15, uc=1, lc=1, num=1, specialsqty=1,
+        specials='@%+=/\'"!#$^?:;,(){}[]~`-_*&<>\\|.'),
     'fidelity.com': PasswordGen(
-        minlen=6, maxlen=20, uc=0, lc=0, letters=2, num=0,
+        minlen=6, maxlen=20,
         specials='`~!@$%^()-_=+\\|;:",./?'),
     'gofundme.com': PasswordGen(
-        minlen=12),
+        minlen=12, uc=1, lc=1, num=1, specialsqty=1),
     'goingtocamp.com': PasswordGen(  # Wisconsin State Park System
         minlen=8, uc=1, lc=1, num=1, specialsqty=0),
     'goodhousekeeping.com': PasswordGen(
-        minlen=8, uc=0, lc=0, letters=0),
+        minlen=8, num=1, specialsqty=1),
     'guardianprotection.com': PasswordGen(
-        minlen=7, specialsqty=0),
+        minlen=7, uc=1, lc=1, num=1),
     'guardianprotection.app': PasswordGen(
-        minlen=10, uc=0, lc=0),
+        minlen=10, letters=1, num=1, specialsqty=1),
     'hbr.org': PasswordGen(  # Harvard Business Review
-        minlen=8, specials='@!#$%^&+='),
+        minlen=8, uc=1, lc=1, num=1, specialsqty=1, specials='@!#$%^&+='),
     'hertz.com': PasswordGen(
-        minlen=8, specials='#$%^&'),
+        minlen=8, uc=1, lc=1, num=1, specialsqty=1, specials='#$%^&'),
     'highmarkbcbs.com': PasswordGen(
-        minlen=12, specials='`~!@#$%^&*()-_=[]{}\\|;:\'",./?'),
+        minlen=12, uc=1, lc=1, num=1, specialsqty=1,
+        specials='`~!@#$%^&*()-_=[]{}\\|;:\'",./?'),
+    'higi.com': PasswordGen(
+        minlen=6, maxlen=30),
     'homedepot.com': PasswordGen(
         minlen=9, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     'homeagain.com': PasswordGen(  # HomeAgain Pet Recovery
         minlen=8, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     'hotels.com': PasswordGen(
-        minlen=6, maxlen=20, uc=0, lc=0, letters=0, specialsqty=0),
+        minlen=6, maxlen=20, num=1),
     'hotmail.com': PasswordGen(
         minlen=8, n_of_m_groups=(2, 'uc', 'lc', 'num', 'spec')),
     'hulu.com': PasswordGen(
         minlen=6, uc=0, lc=0, letters=0, n_of_m_groups=(1, 'num', 'spec')),
     'id.me': PasswordGen(  # ID.me (IRS)
-        minlen=8, specialsqty=0),
+        minlen=8, uc=1, lc=1, num=1),
     'idoxs.net': PasswordGen(  # PWSA
-        minlen=8, maxlen=15, uc=1, lc=1, num=1,
-        specials='!.#%&*', specialsqty=0),
+        minlen=8, maxlen=15, uc=1, lc=1, num=1, specialsqty=0,
+        specials='!.#%&*'),
     'irs.gov': PasswordGen(  # ID.me (IRS)
-        minlen=8, specialsqty=0),
+        minlen=8, uc=1, lc=1, num=1),
     'kraken.com': PasswordGen(
-        minlen=8, uc=0, lc=0),
+        minlen=8, letters=1, num=1, specialsqty=1),
     'laundryvalue.app': PasswordGen(
         specials='', specialsqty=0),
     'live.com': PasswordGen(  # Microsoft outlook hotmail
         minlen=8, n_of_m_groups=(2, 'uc', 'lc', 'num', 'spec')),
+    'logitech.com': PasswordGen(
+        minlen=10),
     'lowes.com': PasswordGen(
-        minlen=8, maxlen=128, uc=0, lc=0, specialsqty=0, maxrun=3),
-    'manuscriptcentral.com': PasswordGen(
-        minlen=8, num=2, uc=0, lc=0, letters=0, specialsqty=0),
+        minlen=8, maxlen=128, letters=1, num=1, maxrun=3, spacesallowed=False),
+    'manuscriptcentral.com': PasswordGen(  # Scholar One Manuscripts - Orcid
+        minlen=8, num=2),
     'marriott.com': PasswordGen(
-        minlen=8, maxlen=20, specials='$!#&@?%=_'),
+        minlen=8, maxlen=20, uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec'),
+        specials='$!#&@?%=_'),
     'meetup.com': PasswordGen(
         minlen=10),
     'microsoft.com': PasswordGen(  # Microsoft account
-        minlen=4, maxlen=127, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+        minlen=4, maxlen=127),
     'MorganStanleyClientServ.com': PasswordGen(
-        minlen=8, maxlen=20, uc=0, lc=0, specialsqty=0, history=3),
+        minlen=8, maxlen=20, specialsqty=0, history=3,
+        specials='', spacesallowed=False),
     'moveon.org': PasswordGen(
-        minlen=8, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+        minlen=8),
     'myequifax.com': PasswordGen(
-        minlen=8, maxlen=20, specials='!@$*+-'),
+        minlen=8, maxlen=20, uc=1, lc=1, num=1,
+        specialsqty=1, specials='!@$*+-'),
     'mymedicare.gov': PasswordGen(
-        minlen=8, maxlen=16, uc=0, lc=0, specials='@!$%^*()', history=6),
+        minlen=8, maxlen=16, letters=1, num=1, specialsqty=1,
+        specials='@!$%^*()', history=6),
     'myprepaidcenter.com': PasswordGen(
-        minlen=8, maxlen=20, specials='!@#$%&'),
-    'mytrueidentity.com': PasswordGen(
+        minlen=8, maxlen=20, uc=1, lc=1, num=1, specialsqty=1,
+        specials='!@#$%&'),
+    'mytrueidentity.com': PasswordGen(  # TransUnion
         minlen=10, maxlen=64),
     'nationwide.com': PasswordGen(
-        minlen=6, maxlen=30, uc=1, lc=1, num=1,
-        specials='!#$+,-./\\:=?@[]_{}|~', specialsqty=1),
+        minlen=6, maxlen=30, uc=1, lc=1, num=1, specialsqty=1,
+        specials='!#$+,-./\\:=?@[]_{}|~', spacesallowed=False),
     'nbc.com': PasswordGen(
         minlen=10, uc=1, lc=1),
     'netacad.com': PasswordGen(  # Cisco Networking Academy
-        minlen=8, history=3),
+        minlen=8, uc=1, lc=1, num=1, specialsqty=1, history=3),
     'netflix.com': PasswordGen(
         minlen=6, maxlen=60),
     'newegg.com': PasswordGen(
@@ -332,14 +379,13 @@ pswdGens = {
     'nvidia.com': PasswordGen(
         minlen=9, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     'onsolve.net': PasswordGen(  # Allegheny Alerts
-        minlen=8, uc=0, lc=0, letters=0, num=0,
-        specials='!@#$%^&*()', specialsqty=0),
+        minlen=8, specials='!@#$%^&*()'),
     'openai.com': PasswordGen(  # ChatGPT
-        minlen=8, uc=0, lc=0, letters=0, num=0, specialsqty=0),
+        minlen=8),
     'opendns.com': PasswordGen(
         minlen=8, uc=1, lc=1, num=1, specialsqty=1),
     'pa.us': PasswordGen(  # HHS Keystone ID (PA Child Abuse clearances)
-        minlen=8, maxlen=14, num=0, specials='@&*%$^'),
+        minlen=8, maxlen=14, uc=1, lc=1, specialsqty=1, specials='@&*%$^'),
     'panerabread.com': PasswordGen(
         minlen=6, maxlen=20),
     'partswarehouse.com': PasswordGen(
@@ -348,49 +394,48 @@ pswdGens = {
         minlen=8, letters=1, num=1),
     'penzeys.com': PasswordGen(
         minlen=4, maxlen=20),
-    'peopleseaccount.com': PasswordGen(
+    'peopleseaccount.com': PasswordGen(  # Peoples Natural Gas
         minlen=8, maxlen=32, uc=1, lc=1, num=1,
         specials='!@#$%*_-', specialsqty=1),
     'petco.com': PasswordGen(
         minlen=12, specials='!@#$%^&*',
         n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
-    'pghartsmedia.org': PasswordGen(
+    'pghartsmedia.org': PasswordGen(  # Pittsburgh Center for the Arts PF/PCA
         minlen=8, uc=1, lc=3, num=1, specialsqty=1),
     'pnc.com': PasswordGen(
-        minlen=8, maxlen=20, letters=1, num=1, maxrun=2,
+        minlen=8, maxlen=20, letters=1, num=1, maxrun=2, spacesallowed=False,
         specials='`@#$%*()-_=+;:,.?'),
     'privateinternetaccess.com': PasswordGen(
-        minlen=8, uc=1, lc=1, num=1, specialsqty=0),
+        minlen=8, uc=1, lc=1, num=1),
     'promasterforum.com': PasswordGen(
         minlen=8),
     'quora.com': PasswordGen(
         minlen=8),
-    'reserveamerica.com': PasswordGen(
+    'reserveamerica.com': PasswordGen(  # Pennsylvania (PA) State Parks - DCNR
         minlen=8, uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec')),
     'scribd.com': PasswordGen(
         minlen=10, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
-    'securevetsource.com': PasswordGen(
-        minlen=8, uc=1, lc=1, num=1, specialsqty=0),
+    'securevetsource.com': PasswordGen(  # Point Breeze Vet Clinic pharmacy - Vetsource
+        minlen=8, uc=1, lc=1, num=1),
     'sharefile.com': PasswordGen(
         minlen=8, uc=1, lc=1, num=1, specialsqty=1),
     'solaredge.com': PasswordGen(
-        minlen=8, uc=0, lc=0, letters=1, num=1, specialsqty=0),
+        minlen=8, letters=1, num=1),
     'ssa.gov': PasswordGen(  # my Social Security
-        minlen=8, maxlen=64, specials='!@#$%^&*',
-        firstchar=('uc', 'lc', 'num')),
+        minlen=8, maxlen=64, uc=1, lc=1, num=1, specialsqty=1,
+        specials='!@#$%^&*', firstchar=('uc', 'lc', 'num')),
     'synology.com': PasswordGen(
         minlen=8, n_of_m_groups=(2, 'uc', 'lc', 'num')),
     'tiaa-cref.org': PasswordGen(
-        minlen=6, maxlen=20, uc=0, lc=0, letters=0, num=0,
-        specials='', specialsqty=0),
+        minlen=6, maxlen=20, specials='', specialsqty=0),
     'ticketmaster.com': PasswordGen(
-        minlen=8, uc=0, lc=0, letters=1, num=1, specialsqty=0),
+        minlen=8, letters=1, num=1),
     'topcoder.com': PasswordGen(
-        minlen=8, uc=0, lc=0, letters=1, n_of_m_groups=(1, 'num', 'spec')),
+        minlen=8, letters=1, n_of_m_groups=(1, 'num', 'spec')),
     'trainingmagnetwork.com': PasswordGen(
         minlen=8),
     'tranehome.com': PasswordGen(
-        uc=1, lc=1, num=1, specialsqty=0),
+        uc=1, lc=1, num=1),
     'transunion.com': PasswordGen(
         minlen=12, maxlen=64),
     'tvguide.com': PasswordGen(
@@ -398,27 +443,26 @@ pswdGens = {
     'upmc.com': PasswordGen(  # HealthTrak
         minlen=8, uc=1, lc=1, num=1, specialsqty=1),
     'upmchealthplan.com': PasswordGen(
-        minlen=8, maxlen=14, uc=1, lc=1, num=1, specialsqty=0),
+        minlen=8, maxlen=14, uc=1, lc=1, num=1),
     'ups.com': PasswordGen(  # My Choice
         minlen=12, maxlen=26, uc=1, lc=1, num=1,
         specials='!@#$%*', specialsqty=1),
     'vectorsecurity.com': PasswordGen(
-        minlen=6, uc=1, lc=0, n_of_m_groups=(1, 'num', 'spec')),
+        minlen=6, uc=1, n_of_m_groups=(1, 'num', 'spec')),
     'verizonwireless.com': PasswordGen(
-        minlen=8, maxlen=20, uc=0, lc=0, letters=1, num=1, specialsqty=0),
+        minlen=8, maxlen=20, letters=1, num=1),
     'vitalant.com': PasswordGen(
         minlen=8, uc=1, lc=1, num=1, specialsqty=1),
     'warwickhotels.com': PasswordGen(
-        minlen=6, maxlen=17, uc=0, lc=0, letters=0, num=1, specialsqty=0),
+        minlen=6, maxlen=17, num=1),
     'washingtonpost.com': PasswordGen(
-        minlen=8, uc=0, lc=0, letters=0, num=0,
-        specials='!"#$%&\'()*+,-./:;=?@[\\]^_{}~', specialsqty=1),
+        minlen=8, specials='!"#$%&\'()*+,-./:;=?@[\\]^_{}~', specialsqty=1),
     'wdc.com': PasswordGen(  # Western Digital support
-        minlen=8, uc=0, lc=0, letters=1, num=1, specialsqty=0, history=3),
+        minlen=8, maxlen=999, letters=1, num=1, history=3),
     'wicklespickles.com': PasswordGen(
         minlen=12),
     'zoom.us': PasswordGen(
-        minlen=8, uc=1, lc=1, num=1, specialsqty=0),
+        minlen=8, uc=1, lc=1, num=1),
     }  # end pswdGens
 
 
@@ -427,10 +471,14 @@ pswdGens = {
 normalExit = 0  #  Linux result codes returned to OS:  0 = normal, else = abnormal
 
 def selftest(args):
-    if len(args) >= 1:
-        fill = args[0] == 'fill'
-    else:
-        fill = False
+    fill = False
+    noPause = False
+    for n in range(0, len(args)):
+        if args[n] == 'fill':
+            fill = True
+        elif args[n] == 'nopause':
+            noPause = True
+
     try:
         pswdGens['testbadspecials'] = PasswordGen(
             minlen=6, maxlen=10, specials='$x*3-')
@@ -443,8 +491,7 @@ def selftest(args):
         minlen=8, maxlen=64, specials='!@#$%^&*',
         firstchar=('uc', 'lc', 'num', 'junk'))
     pswdGens['short3of4'] = PasswordGen(
-        minlen=3, uc=0, lc=0, letters=0, num=0, specialsqty=0,
-        n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec'))
+        minlen=3, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec'))
 
     costcopswd = pswdGens['costco.com'].genPassword(fill=fill)
     print(f'For costco.com (default preferred length):  {costcopswd}')
@@ -470,7 +517,15 @@ def selftest(args):
     except UserError:
         pass
 
+
+    if not noPause:
+        try:
+            input('\nPausing so user can read output.'
+                  '  Press "Enter" when ready. ')
+        except EOFError:
+            pass
+
     return normalExit
 
 if __name__ == '__main__':
-    sys.exit(selftest(sys.argv[1:]))
+    sys.exit(selftest(sys.argv[1:]))  # skip module filename
