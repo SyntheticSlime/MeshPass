@@ -33,8 +33,8 @@ class PasswordGen:
     #   M E T H O D S
 
     def __init__(self, *,
-                       uc: int | Sequence = 0, lc: int | Sequence = 0, letters: int | Sequence = 0,
-                       num: int | Sequence = 0,
+                       uc: int | Sequence = 0, lc: int | Sequence = 0,
+                       letters: int | Sequence = 0, num: int | Sequence = 0,
 #                      specialchars: str = '`~!@#$%^&*()-_=+[]{}\\|;:\'",./<>?',
                        specialchars: str = string.punctuation,
                        special: int | Sequence = 0, lenmin: int = lenMinDflt,
@@ -71,7 +71,7 @@ class PasswordGen:
                     else:  # non-printable ASCII char
                         raise(f'ExtraSpecialChars contains a non-printable'
                               f' ASCII char (control code).  Illegal.')
-            self.extraSpecialChars = ''.join(extraspecialchars)  # str or other Sequence
+            self.extraSpecialChars = ''.join(set(extraspecialchars))  # str or other Sequence
         remainder = set(specialchars) - set(string.punctuation + self.extraSpecialChars)
         if len(remainder) > 0:
             raise UserError(f'Illegal character(s) in'
@@ -101,7 +101,7 @@ class PasswordGen:
 #       self.lettersMin = letters         # nbr of req'd letters (when uc & lc not
 #                                         #    specified)
 #       self.numMin = num                 # nbr of req'd numerals
-        self.specialChars = specialchars  # string of all allowable special chars
+        self.specialChars = ''.join(set(specialchars))  # string of all allowable special chars
 #       self.specialMin = special         # nbr of req'd special characters
         self.lenMin = lenmin              # minimum allowable length of password
         self.lenMax = lenmax              # maximum allowable length of password
@@ -109,9 +109,9 @@ class PasswordGen:
         self.NofMgroups = n_of_m_groups   # req'r chars from n groups of m indicated
         self.firstChar = firstchar    # restrict 1st char to chars in these grps
         if firstcharspecialchars is None:
-            self.firstCharSpecialChars = specialchars  # allowed in first char
+            self.firstCharSpecialChars = self.specialChars  # allowed in first char
         else:
-            self.firstCharSpecialChars = firstcharspecialchars
+            self.firstCharSpecialChars = ''.join(set(firstcharspecialchars))
         self.history = history        # pswd cannot match last n passwords
         self.domain = domain  # name of domain to use this password with.
         self.spacesAllowed = spacesallowed
@@ -133,7 +133,7 @@ class PasswordGen:
                 if char in self.specialChars:
                     raise UserError(f'Char in "otherchars" already specified'
                                     f' in "specialchars".')
-            self.otherChars = otherchars
+            self.otherChars = ''.join(set(otherchars))
         else:  # otherchars is None or ''
             self.otherChars = ''
         if ruleschecked is not None:
@@ -539,7 +539,7 @@ pswdGens = {
         lenmin=8, lenmax=20, uc=1, lc=1, num=1, special=(0, 3),
         specialchars='`~!#$%^&*()-_=+[]{}\\|;:\'",./>?'),
     'dentalplans.com': PasswordGen(  # Aetna Dental Access
-        lenmin=8, lenmax=130,  # maybe more than 130
+        lenmin=8, lenmax=260,  # maybe more than 260
         uc=1, lc=1, num=1, special=1,  # others (punc not special) allowed too
         specialchars='#$!@&', spacesallowed=True, ruleschecked='2026-08-14',
         otherchars='`~%^*()-_=+[]{}\\|;:\'",./<>?'),
