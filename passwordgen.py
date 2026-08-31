@@ -551,8 +551,10 @@ class PasswordGen:
         value += minmax('letters')
         value += minmax('num')
         value += minmax('special')
-        if self.specialChars != PasswordGen.asciiSpecialChars:
-            value += f'\n\t specialChars = {self.specialChars}'
+#       if self.specialChars != PasswordGen.asciiSpecialChars:
+        if len(set(PasswordGen.asciiSpecialChars)-set(self.specialChars)) > 0:
+            value += (f'\n\t specialChars({len(self.specialChars)})'
+                      f' = {self.specialChars}')
         if (self.extraSpecialChars is not None
               and len(self.extraSpecialChars) > 0):
             value += f'\n\t extraSpecialChars = {self.extraSpecialChars}'
