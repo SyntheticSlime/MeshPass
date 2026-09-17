@@ -23,7 +23,7 @@ UpArrow = '\uA71B'  # just for testing
 pswdGens = {}  # dict w/DNS domains for keys, PasswordGen instances for values.
 
 
-#   F U N C T I O N S
+#   M O D U L E   F U N C T I O N S
 
 def delChars(chars: str | NoneType, forbiddenChars: str) -> str:
     '''Remove forbidden characters from a string and return remaining chars.
@@ -39,10 +39,10 @@ def delChars(chars: str | NoneType, forbiddenChars: str) -> str:
 
 #   F R O M   C O N F I G U R A T I O N   F I L E   ( E V E N T U A L L Y )
 
-myConfusableChars = 'Il1|O0'  # maybe '2Z'  '5S'  '6b'  '8B'
+myConfusableChars = 'Il1|O0'  # maybe '2Z'  '5S'  '6b'  '8B'  r'`\'
 
 if 'myConfusableChars' not in globals():
-    myConfusableChars = 'Il1|O0'  # maybe '2Z'  '5S'  '6b'  '8B'
+    myConfusableChars = 'Il1|O0'  # maybe '2Z'  '5S'  '6b'  '8B'  r'`\'
 
 
 #   C L A S S E S
@@ -62,13 +62,14 @@ class PasswordGen:
     #   I N S T A N C E   M E T H O D S
 
     def __init__(self, *,
+                       pwlen: int | Sequence = 1,
                        uc: int | Sequence = 0, lc: int | Sequence = 0,
                        letters: int | Sequence = 0, num: int | Sequence = 0,
 #                      specialchars: str = '`~!@#$%^&*()-_=+[]{}\\|;:\'",./<>?',
 #                      specialchars: str = string.punctuation,
                        specialchars: str = asciiSpecialChars,
-                       special: int | Sequence = 0, lenmin: int = lenMinDflt,
-                       lenmax: int = lenMaxDflt,
+                       special: int | Sequence = 0,
+#                      lenmin: int = lenMinDflt, lenmax: int = lenMaxDflt,
                        maxrun: int | NoneType = None,
                        n_of_m_groups: tuple | NoneType = None,
                        firstchar: tuple | NoneType = None,
@@ -95,9 +96,6 @@ class PasswordGen:
 #           self.otherChars = otherchars
 #       else:  # confusables not allowed
 
-        if lenmin > lenmax:
-            raise UserError(f'Minimum password length ({lenmin}) may'
-                            f' not be greater than maximum length ({lenmax}).')
         if extraspecialchars is None:
             self.extraSpecialChars = ''
         else:
@@ -136,27 +134,33 @@ class PasswordGen:
         self.extraSpecialChars = delChars(self.extraSpecialChars,
                                           self.confusableChars)
         self.specialChars += self.extraSpecialChars
-        self.firstCharSpecialChars = delChars(firstcharspecialchars,
-                                              self.confusableChars)
+#       self.firstCharSpecialChars = delChars(firstcharspecialchars,
+#                                             self.confusableChars)
         if firstcharspecialchars is None:
             self.firstCharSpecialChars = self.specialChars  # allowed in first char
         else:
             self.firstCharSpecialChars = delChars(firstcharspecialchars,
-                                                  confusablechars)
+                                                  self.confusableChars)
         self.otherChars = delChars(otherchars, self.confusableChars)
 
 
-        chrGroups = ((uc,      'uc'),       # upper case letters
-                     (lc,      'lc'),       # lower case letters
-                     (letters, 'letters'),  # either case letters
-                     (num,     'num'),      # digits
-                     (special, 'special'))  # punctuation / symbols / specials
-        for (arg, grp) in chrGroups:
+        chrGroups = (#_init_arg attrPfx lowestMin
+                     (pwlen,   'len',     1),  # password length limits
+                     (uc,      'uc',      0),  # upper case letters
+                     (lc,      'lc',      0),  # lower case letters
+                     (letters, 'letters', 0),  # either case letters
+                     (num,     'num',     0),  # digits
+                     (special, 'special', 0),  # punctuation / symbols / specials
+                    )
+        for (arg, grp, lowbound) in chrGroups:
             if isinstance(arg, Sequence):  # list, tuple, or descendant of those
                 if 1 > len(arg) > 2:       # ^yes.  How long is Sequence?
                     raise UserError(f'Char group "{grp}" can have'
                                      ' only 1 or 2 limits.')
-                setattr(self, grp+'Min', int(arg[0]))  # minimum uc/lc/...
+                if (low := int(arg[0])) < lowbound:
+                    raise UserError(f'Min value ({low}) for char group "{grp}" is'
+                                    f' too low.')
+                setattr(self, grp+'Min', low)  # minimum uc/lc/...
                 if len(arg) == 1:  # has a maximum been specified in the tuple?
                     setattr(self, grp+'Max', None)  # unlimited maximum
                 elif arg[1] < arg[0]:  # max < min?
@@ -173,8 +177,8 @@ class PasswordGen:
 #       self.numMin = num                 # nbr of req'd numerals
 #       self.specialChars = ''.join(set(specialchars))  # string of all allowable special chars
 #       self.specialMin = special         # nbr of req'd special characters
-        self.lenMin = lenmin              # minimum allowable length of password
-        self.lenMax = lenmax              # maximum allowable length of password
+#       self.lenMin = lenmin              # minimum allowable length of password
+#       self.lenMax = lenmax              # maximum allowable length of password
         self.maxRun = maxrun              # allowable consecutive same character
         self.NofMgroups = n_of_m_groups   # req'r chars from n groups of m indicated
         self.firstChar = firstchar    # restrict 1st char to chars in these grps
@@ -182,10 +186,14 @@ class PasswordGen:
         self.domain = domain  # name of domain to use this password with.
         self.spacesAllowed = spacesallowed
         self.caseSensitive = casesensitive
+        if self.lenMax is not None and self.lenMin > self.lenMax:
+            raise UserError(f'Minimum password length ({self.lenMin}) may'
+                            f' not be greater than maximum length ({self.lenMax}).')
         if (len(self.specialChars)  # + len(self.extraSpecialChars)
               == 0
               and self.specialMax != 0):
-            warnings.warn(f'No special chars are in list of allowed specials,'
+            warnings.warn(f'No special chars are in list of allowed specials'
+                            f' for domain "{self.domain}",'
                             f' but the specified maximum # of specials'
                             f' ({self.specialMax}) is not zero. Setting to'
                             f' zero temporarily.')
@@ -306,12 +314,13 @@ class PasswordGen:
                         warnings.warn(f'Unknown group "{grp}" in N-of-M groups.')
 
             requiredlen += n_of_m_groups[0]  # number of required groups
-        if requiredlen > lenmax:
+        if self.lenMax is not None and requiredlen > self.lenMax:
             raise UserError('Required length exceeds maximum length.')
-        if requiredlen > lenmin:
-            warnings.warn(f'Minimum length ({lenmin}) adjusted'
-                          f' to required length ({requiredlen})')
-            self.lenmin = lenmin = requiredlen
+        if requiredlen > self.lenMin:
+            warnings.warn(f'Minimum length ({self.lenMin}) temporarily adjusted'
+                          f' to required length ({requiredlen})'
+                          f' for domain "{self.domain}".')
+            self.lenMin = requiredlen
 
     def genPassword(self, preferredlen: int = 16,
                           *, test=False, fill=False) -> str | NoneType:
@@ -380,8 +389,13 @@ class PasswordGen:
 
         if isinstance(preferredlen, str):
             if preferredlen.lower() == 'max':
-                preferredlen = self.lenMax
-            else:  # not 'max'
+                if self.lenMax is None:
+                    raise UserError(f'"max" cannot be specified for preferred'
+                                    f' password length when no maximum length'
+                                    f' is specified.')
+                else:
+                    preferredlen = self.lenMax
+            else:  # string not 'max'
                 raise UserError(f'Illegal value "{preferredlen}" for'
                                 f' preferredlen in genPassword method.')
 
@@ -401,12 +415,15 @@ class PasswordGen:
 
         if self.firstChar is None:  # are there 1st char restrictions?
             firstCharacter = ''  # the 1st char not treated specially
-            adjMinLen = self.lenMin    # adjusted minimum password length
-            adjMaxLen = self.lenMax    # adjusted maximum password length
+            adjLenMin = self.lenMin    # adjusted minimum password length
+            adjLenMax = self.lenMax    # adjusted maximum password length
             adjPrefLen = preferredlen  # adjusted requested password length
         else:                       # yes, there are 1st char restrictions.
-            adjMinLen = self.lenMin - 1    # 1st char handled separately
-            adjMaxLen = self.lenMax - 1    # so remainder of password is
+            adjLenMin = self.lenMin - 1    # 1st char handled separately
+            if self.lenMax is None:
+                adjLenMax = None
+            else:
+                adjLenMax = self.lenMax - 1    # so remainder of password is
             adjPrefLen = preferredlen - 1  # one character shorter.
 
             firstChrTypes = {'uc':   self.ascii_uppercase,
@@ -478,14 +495,16 @@ class PasswordGen:
                     countChars(char)
 
             # Choose additional characters to reach password's target length
-            adjActualLen = min(adjMaxLen, adjPrefLen)
+            if adjLenMax is None:
+                adjActualLen = adjPrefLen
+            else:
+                adjActualLen = min(adjLenMax, adjPrefLen)
             actualLen = adjActualLen + (0 if self.firstChar is None else 1)
             prefLen   = adjPrefLen   + (0 if self.firstChar is None else 1)
             if actualLen < prefLen:
                 warnings.warn(f'Requested password length ({prefLen}) reduced to'
                               f' the maximum ({actualLen}) allowed by this ruleset.')
-            for n in range(max(adjMinLen, actualLen)
-#                              min(adjMaxLen, adjPrefLen))
+            for n in range(max(adjLenMin, actualLen)
                            - len(password)):
                 if fill:  # Be careful with this feature.  It can create
                           #   illegal runs of same characters if
@@ -541,7 +560,7 @@ class PasswordGen:
                     maxCol = ''
                 else:
                     maxCol = f'max {maxVal}'.ljust(colWidth)
-                line = f'\n\t {(label+':').ljust(9)}{minCol}{maxCol}'
+                line = f'\n\t {(label+':').ljust(colWidth)}{minCol}{maxCol}'
             return line
 
         value = f'Pswd Generator Ruleset for domain {self.domain}'
@@ -552,9 +571,11 @@ class PasswordGen:
         value += minmax('num')
         value += minmax('special')
 #       if self.specialChars != PasswordGen.asciiSpecialChars:
-        if len(set(PasswordGen.asciiSpecialChars)-set(self.specialChars)) > 0:
-            value += (f'\n\t specialChars({len(self.specialChars)})'
-                      f' = {self.specialChars}')
+        regSpecChars = ''.join(sorted(set(self.specialChars)
+                                & set(PasswordGen.asciiSpecialChars)))
+        if len(set(PasswordGen.asciiSpecialChars) - set(regSpecChars)) > 0:
+            value += (f'\n\t specialChars({len(regSpecChars)})'
+                      f' = {regSpecChars}')
         if (self.extraSpecialChars is not None
               and len(self.extraSpecialChars) > 0):
             value += f'\n\t extraSpecialChars = {self.extraSpecialChars}'
@@ -570,6 +591,8 @@ class PasswordGen:
             value += f'\n\t Spaces allowed'
         if not self.caseSensitive:
             value += f'\n\t NOT sensitive to case'
+        if self.maxRun is not None:
+            value += f'\n\t max run: {self.maxRun}'
         return value
 
 
@@ -579,276 +602,278 @@ class PasswordGen:
 
 pswdGens = {
     (dom := 'aa.com'): PasswordGen(domain=dom,  # American Airlines
-        lenmin=5, lenmax=16),
+        pwlen=(5, 16)),
     (dom := 'aaa.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=31, num=1, letters=1, ruleschecked='2026-08-14',
+        pwlen=(8, 31), num=1, letters=1, ruleschecked='2026-08-14',
         specialchars='^.-!@#{}~$_', special=0, history=1),
     (dom := 'aarp.org'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=64, spacesallowed=True, ruleschecked='2026-08-14'),
+        pwlen=(8, 64), spacesallowed=True, ruleschecked='2026-08-14'),
     (dom := 'actalis.it'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=16, uc=1, lc=1, num=1, special=1,
+        pwlen=(8, 16), uc=1, lc=1, num=1, special=1,
         specialchars='$%!?-_', extraspecialchars=GBP, ruleschecked='2026-08-14'),
     (dom := 'actblue.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1, ruleschecked='2026-08-14'),
+        pwlen=8, uc=1, lc=1, num=1, ruleschecked='2026-08-14'),
     (dom := 'adorama.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=100, uc=0, lc=0, num=0, special=0, spacesallowed=True,
+        pwlen=(8, 100), uc=0, lc=0, num=0, special=0, spacesallowed=True,
         ruleschecked='2026-08-14'),
+    (dom := 'advancedmd.com'): PasswordGen(domain=dom,
+        pwlen=8, uc=1, lc=1, num=1, special=1, maxrun=3, ruleschecked='2026-09-11'),
     (dom := 'aliexpress.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=20, ruleschecked='2026-08-14'),
+        pwlen=(6, 20), ruleschecked='2026-08-14'),
     (dom := 'alltrails.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=128, ruleschecked='2026-08-19'),
+        pwlen=(6, 128), ruleschecked='2026-08-19'),
     (dom := 'americastestkitchen.com'): PasswordGen(domain=dom,
-        lenmin=1, uc=0, num=0, special=0, ruleschecked='2026-08-19'),
+        pwlen=1, uc=0, num=0, special=0, ruleschecked='2026-08-19'),
     (dom := 'americanexpress.com'): PasswordGen(domain=dom,
-        lenmin=8, spacesallowed=True, history=2, ruleschecked='2026-08-19'),
+        pwlen=8, spacesallowed=True, history=2, ruleschecked='2026-08-19'),
     (dom := 'anvil.works'): PasswordGen(domain=dom,
-        lenmin=1, uc=0, num=0, special=0, ruleschecked='2026-08-19'),
+        pwlen=1, uc=0, num=0, special=0, ruleschecked='2026-08-19'),
     (dom := 'aplus.net'): PasswordGen(domain=dom,
-        lenmin=10, lenmax=32, uc=1, lc=1, num=2, special=1,
+        pwlen=(10, 32), uc=1, lc=1, num=2, special=1,
         specialchars='~!@#$%^&*()-_+={}<>/?', ruleschecked='2026-08-19'),
     (dom := 'aquasana.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1, ruleschecked='2026-09-05'),
     (dom := 'att.com'): PasswordGen(domain=dom,  # AT&T
-        lenmin=8, lenmax=24, specialchars='!#$*-_=+?'),
+        pwlen=(8, 24), specialchars='!#$*-_=+?'),
     (dom := 'avast.com'): PasswordGen(domain=dom,  # Avast! Antivirus
-        lenmin=8, lenmax=50, uc=1, lc=1, num=1, special=1, ruleschecked='2026-08-19'),
+        pwlen=(8, 50), uc=1, lc=1, num=1, special=1, ruleschecked='2026-08-19'),
     (dom := 'badlandsranch.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1, special=1, specialchars='!&$%^*@',
+        pwlen=8, uc=1, lc=1, num=1, special=1, specialchars='!&$%^*@',
         ruleschecked='2026-08-11'),
     (dom := 'bestwestern.com'): PasswordGen(domain=dom,
-        lenmin=10, num=1, special=1, history=4, ruleschecked='2026-08-19'),
+        pwlen=10, num=1, special=1, history=4, ruleschecked='2026-08-19'),
     (dom := 'bhphotovideo.com'): PasswordGen(domain=dom,  # B&H Photo (NYC)
-        lenmin=8, letters=2, num=2, special=2),
+        pwlen=8, letters=2, num=2, special=2),
     (dom := 'bit.ly'): PasswordGen(domain=dom,
-        lenmin=6, letters=1, num=1, special=1),
+        pwlen=6, letters=1, num=1, special=1),
     (dom := 'bosch-home.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1),
     (dom := 'breville.com'): PasswordGen(domain=dom,
-        lenmin=6, num=1),
+        pwlen=6, num=1),
     (dom := 'choicehotels.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=44, special=1, history=0),  # all specialchars OK
+        pwlen=(8, 44), special=1, history=0),  # all specialchars OK
     (dom := 'citi.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=64, uc=1, lc=1, num=1, maxrun=2, spacesallowed=False,
+        pwlen=(8, 64), uc=1, lc=1, num=1, maxrun=2, spacesallowed=False,
         specialchars='~`!@#$%^&*()_-\\/|', special=1, ruleschecked='2026-08-26'),
     (dom := 'citizensbankonline.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=24, letters=1, num=1, spacesallowed=False,
+        pwlen=(8, 24), letters=1, num=1, spacesallowed=False,
         specialchars='`~!@#$%^&*()-_=+[]{}|;:\',./<>?'),
     (dom := 'costco.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=16, uc=1, lc=1, num=1, special=1,
+        pwlen=(8, 16), uc=1, lc=1, num=1, special=1,
         specialchars='!@#$&', spacesallowed=False),  # no < >
     (dom := 'culturaldistrict.org'): PasswordGen(domain=dom,  # Pgh Cultural District
-        lenmin=8, uc=1, num=1, special=1),
+        pwlen=8, uc=1, num=1, special=1),
     (dom := 'customerfeed.com'): PasswordGen(domain=dom,  # Highmark BCBS Secure Msg Ctr
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1),
     (dom := 'cvs.com'): PasswordGen(domain=dom,
-        lenmin=10, lenmax=64, uc=1, lc=1, num=1, special=1,
+        pwlen=(10, 64), uc=1, lc=1, num=1, special=1,
         specialchars='/@$%&'),
     (dom := 'delish.com'): PasswordGen(domain=dom,
-        lenmin=8, num=1, special=1),
+        pwlen=8, num=1, special=1),
     (dom := 'delta.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=20, uc=1, lc=1, num=1, special=(0, 3),
+        pwlen=(8, 20), uc=1, lc=1, num=1, special=(0, 3),
         specialchars='`~!#$%^&*()-_=+[]{}\\|;:\'",./>?'),
     (dom := 'dentalplans.com'): PasswordGen(domain=dom,  # Aetna Dental Access
-        lenmin=8, lenmax=260,  # maybe more than 260
+        pwlen=(8, 260),  # maybe more than 260
         uc=1, lc=1, num=1, special=1,  # others (punc not special) allowed too
         specialchars='#$!@&', spacesallowed=True, ruleschecked='2026-08-14',
         otherchars='`~%^*()-_=+[]{}\\|;:\'",./<>?'),
     (dom := 'disneyplus.com'): PasswordGen(domain=dom,
-        lenmin=6, n_of_m_groups=(1, 'num', 'spec')),
+        pwlen=6, n_of_m_groups=(1, 'num', 'spec')),
     (dom := 'dollarbank.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=10, letters=1, num=1, casesensitive=False,
+        pwlen=(6, 10), letters=1, num=1, casesensitive=False,
         specialchars='!@#$%&*_+-=?()', special=0),
     (dom := 'e-zpassny.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=64, uc=1, lc=1, num=1, special=1,
+        pwlen=(8, 64), uc=1, lc=1, num=1, special=1,
         specialchars='!@#$%*()-_+=~;,.'),
     (dom := 'experian.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=35, uc=1, lc=1, num=1, special=1,
+        pwlen=(8, 35), uc=1, lc=1, num=1, special=1,
         specialchars='_@~!?#$^*+=:;,|/()&{}[\\.-'),
     (dom := 'fandango.com'): PasswordGen(domain=dom,
-        lenmin=8, lc=1, num=1, spacesallowed=False),  # maxrun=3 ?
+        pwlen=8, lc=1, num=1, spacesallowed=False),  # maxrun=3 ?
     (dom := 'fcc.gov'): PasswordGen(domain=dom,  # FCC Commission Registration System (CORES)
-        lenmin=12, lenmax=15, uc=1, lc=1, num=1, special=1,
+        pwlen=(12, 15), uc=1, lc=1, num=1, special=1,
         specialchars='@%+=/\'"!#$^?:;,(){}[]~`-_*&<>\\|.'),
     (dom := 'fidelity.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=20,
+        pwlen=(6, 20),
         specialchars='`~!@$%^()-_=+\\|;:",./?'),
     (dom := 'gofundme.com'): PasswordGen(domain=dom,
-        lenmin=12, uc=1, lc=1, num=1, special=1),
+        pwlen=12, uc=1, lc=1, num=1, special=1),
     (dom := 'goingtocamp.com'): PasswordGen(domain=dom,  # Wisconsin State Park System
-        lenmin=8, uc=1, lc=1, num=1, special=0),
+        pwlen=8, uc=1, lc=1, num=1, special=0),
     (dom := 'goodhousekeeping.com'): PasswordGen(domain=dom,
-        lenmin=8, num=1, special=1),
+        pwlen=8, num=1, special=1),
     (dom := 'guardianprotection.com'): PasswordGen(domain=dom,
-        lenmin=7, uc=1, lc=1, num=1),
+        pwlen=7, uc=1, lc=1, num=1),
     (dom := 'guardianprotection.app'): PasswordGen(domain=dom,
-        lenmin=10, letters=1, num=1, special=1),
+        pwlen=10, letters=1, num=1, special=1),
     (dom := 'hbr.org'): PasswordGen(domain=dom,  # Harvard Business Review
-        lenmin=8, uc=1, lc=1, num=1, special=1, specialchars='@!#$%^&+='),
+        pwlen=8, uc=1, lc=1, num=1, special=1, specialchars='@!#$%^&+='),
     (dom := 'hertz.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1, special=1, specialchars='#$%^&'),
+        pwlen=8, uc=1, lc=1, num=1, special=1, specialchars='#$%^&'),
     (dom := 'highmarkbcbs.com'): PasswordGen(domain=dom,
-        lenmin=12, uc=1, lc=1, num=1, special=1,
+        pwlen=12, uc=1, lc=1, num=1, special=1,
         specialchars='`~!@#$%^&*()-_=[]{}\\|;:\'",./?'),
     (dom := 'higi.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=30),
+        pwlen=(6, 30)),
     (dom := 'homedepot.com'): PasswordGen(domain=dom,
-        lenmin=9, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
+        pwlen=9, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     (dom := 'homeagain.com'): PasswordGen(domain=dom,  # HomeAgain Pet Recovery
-        lenmin=8, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
+        pwlen=8, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     (dom := 'hotels.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=20, num=1),
+        pwlen=(6, 20), num=1),
     (dom := 'hotmail.com'): PasswordGen(domain=dom,
-        lenmin=8, n_of_m_groups=(2, 'uc', 'lc', 'num', 'spec')),
+        pwlen=8, n_of_m_groups=(2, 'uc', 'lc', 'num', 'spec')),
     (dom := 'hulu.com'): PasswordGen(domain=dom,
-        lenmin=6, uc=0, lc=0, letters=0, n_of_m_groups=(1, 'num', 'spec')),
+        pwlen=6, uc=0, lc=0, letters=0, n_of_m_groups=(1, 'num', 'spec')),
     (dom := 'id.me'): PasswordGen(domain=dom,  # ID.me (IRS)
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1),
     (dom := 'idoxs.net'): PasswordGen(domain=dom,  # PWSA
-        lenmin=8, lenmax=15, uc=1, lc=1, num=1, special=0,
+        pwlen=(8, 15), uc=1, lc=1, num=1, special=0,
         specialchars='!.#%&*'),
     (dom := 'irs.gov'): PasswordGen(domain=dom,  # ID.me (IRS)
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1),
     (dom := 'jccpgh.org'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=130,  # maybe more than 130
+        pwlen=(8, 130),  # maybe more than 130
         letters=1, num=1, ruleschecked='2026-08-19'),
     (dom := 'kraken.com'): PasswordGen(domain=dom,
-        lenmin=8, letters=1, num=1, special=1),
+        pwlen=8, letters=1, num=1, special=1),
     (dom := 'laundryvalue.app'): PasswordGen(domain=dom,
         specialchars='', special=0),
     (dom := 'live.com'): PasswordGen(domain=dom,  # Microsoft outlook hotmail
-        lenmin=8, n_of_m_groups=(2, 'uc', 'lc', 'num', 'spec')),
+        pwlen=8, n_of_m_groups=(2, 'uc', 'lc', 'num', 'spec')),
     (dom := 'logitech.com'): PasswordGen(domain=dom,
-        lenmin=10),
+        pwlen=10),
     (dom := 'lowes.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=128, letters=1, num=1, maxrun=3, spacesallowed=False),
+        pwlen=(8, 128), letters=1, num=1, maxrun=3, spacesallowed=False),
     (dom := 'manuscriptcentral.com'): PasswordGen(domain=dom,  # Scholar One Manuscripts - Orcid
-        lenmin=8, num=2),
+        pwlen=8, num=2),
     (dom := 'marriott.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=20, uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec'),
+        pwlen=(8, 20), uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec'),
         specialchars='$!#&@?%=_'),
     (dom := 'meetup.com'): PasswordGen(domain=dom,
-        lenmin=10),
+        pwlen=10),
     (dom := 'microsoft.com'): PasswordGen(domain=dom,  # Microsoft account
-        lenmin=4, lenmax=127),
+        pwlen=(4, 127)),
     (dom := 'MorganStanleyClientServ.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=20, special=(0, 0), history=3,
+        pwlen=(8, 20), special=(0, 0), history=3,
         specialchars='', spacesallowed=False),
     (dom := 'moveon.org'): PasswordGen(domain=dom,
-        lenmin=8),
+        pwlen=8),
     (dom := 'myequifax.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=20, uc=1, lc=1, num=1,
+        pwlen=(8, 20), uc=1, lc=1, num=1,
         special=1, specialchars='!@$*+-'),
     (dom := 'mymedicare.gov'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=16, letters=1, num=1, special=1,
+        pwlen=(8, 16), letters=1, num=1, special=1,
         specialchars='@!$%^*()', history=6),
     (dom := 'myprepaidcenter.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=20, uc=1, lc=1, num=1, special=1,
+        pwlen=(8, 20), uc=1, lc=1, num=1, special=1,
         specialchars='!@#$%&'),
     (dom := 'mytrueidentity.com'): PasswordGen(domain=dom,  # TransUnion
-        lenmin=12, lenmax=64),
+        pwlen=(12, 64)),
     (dom := 'nationwide.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=30, uc=1, lc=1, num=1, special=1,
+        pwlen=(6, 30), uc=1, lc=1, num=1, special=1,
         specialchars='!#$+,-./\\:=?@[]_{}|~', spacesallowed=False),
     (dom := 'nbc.com'): PasswordGen(domain=dom,
-        lenmin=10, uc=1, lc=1),
+        pwlen=10, uc=1, lc=1),
     (dom := 'netacad.com'): PasswordGen(domain=dom,  # Cisco Networking Academy
-        lenmin=8, uc=1, lc=1, num=1, special=1, history=3),
+        pwlen=8, uc=1, lc=1, num=1, special=1, history=3),
     (dom := 'netflix.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=60),
+        pwlen=(6, 60)),
     (dom := 'newegg.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=30, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
+        pwlen=(8, 30), n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     (dom := 'nist.gov'): PasswordGen(domain=dom,  # Voting TWiki
-        lenmin=12, lenmax=32, uc=1, lc=1, num=1, special=1),
+        pwlen=(12, 32), uc=1, lc=1, num=1, special=1),
     (dom := 'nvidia.com'): PasswordGen(domain=dom,
-        lenmin=9, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
+        pwlen=9, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     (dom := 'onsolve.net'): PasswordGen(domain=dom,  # Allegheny Alerts
-        lenmin=8, specialchars='!@#$%^&*()'),
+        pwlen=8, specialchars='!@#$%^&*()'),
     (dom := 'openai.com'): PasswordGen(domain=dom,  # ChatGPT
-        lenmin=8),
+        pwlen=8),
     (dom := 'opendns.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1, special=1),
+        pwlen=8, uc=1, lc=1, num=1, special=1),
     (dom := 'pa.us'): PasswordGen(domain=dom,  # HHS Keystone ID (PA Child Abuse clearances)
-        lenmin=8, lenmax=14, uc=1, lc=1, special=1, specialchars='@&*%$^'),
+        pwlen=(8, 14), uc=1, lc=1, special=1, specialchars='@&*%$^'),
     (dom := 'panerabread.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=20),
+        pwlen=(6, 20)),
     (dom := 'partswarehouse.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec')),
+        pwlen=8, uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec')),
     (dom := 'pbs.org'): PasswordGen(domain=dom,
-        lenmin=8, letters=1, num=1),
+        pwlen=8, letters=1, num=1),
     (dom := 'penzeys.com'): PasswordGen(domain=dom,
-        lenmin=4, lenmax=20),
+        pwlen=(4, 20)),
     (dom := 'peopleseaccount.com'): PasswordGen(domain=dom,  # Peoples Natural Gas
-        lenmin=8, lenmax=32, uc=1, lc=1, num=1,
+        pwlen=(8, 32), uc=1, lc=1, num=1,
         specialchars='!@#$%*_-', special=1),
     (dom := 'petco.com'): PasswordGen(domain=dom,
-        lenmin=12, specialchars='!@#$%^&*',
+        pwlen=12, specialchars='!@#$%^&*',
         n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     (dom := 'pghartsmedia.org'): PasswordGen(domain=dom,  # Pittsburgh Center for the Arts PF/PCA
-        lenmin=8, uc=1, lc=3, num=1, special=1),
+        pwlen=8, uc=1, lc=3, num=1, special=1),
     (dom := 'pnc.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=20, letters=1, num=1, maxrun=2, spacesallowed=False,
+        pwlen=(8, 20), letters=1, num=1, maxrun=2, spacesallowed=False,
         specialchars='`@#$%*()-_=+;:,.?'),
     (dom := 'privateinternetaccess.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1),
     (dom := 'promasterforum.com'): PasswordGen(domain=dom,
-        lenmin=8),
+        pwlen=8),
     (dom := 'quora.com'): PasswordGen(domain=dom,
-        lenmin=8),
+        pwlen=8),
     (dom := 'reserveamerica.com'): PasswordGen(domain=dom,  # Pennsylvania (PA) State Parks - DCNR
-        lenmin=8, uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec')),
+        pwlen=8, uc=1, lc=1, n_of_m_groups=(1, 'num', 'spec')),
     (dom := 'scribd.com'): PasswordGen(domain=dom,
-        lenmin=10, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
+        pwlen=10, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec')),
     (dom := 'securevetsource.com'): PasswordGen(domain=dom,  # Point Breeze Vet Clinic pharmacy - Vetsource
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1),
     (dom := 'sharefile.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1, special=1),
+        pwlen=8, uc=1, lc=1, num=1, special=1),
     (dom := 'solaredge.com'): PasswordGen(domain=dom,
-        lenmin=8, letters=1, num=1),
+        pwlen=8, letters=1, num=1),
     (dom := 'ssa.gov'): PasswordGen(domain=dom,  # my Social Security
-        lenmin=8, lenmax=64, uc=1, lc=1, num=1, special=1,
+        pwlen=(8, 64), uc=1, lc=1, num=1, special=1,
         specialchars='!@#$%^&*', firstchar=('uc', 'lc', 'num')),
     (dom := 'staples.com'): PasswordGen(domain=dom,
-        lenmin=8, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec'),
+        pwlen=8, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec'),
         ruleschecked='2026-08-28'),
     (dom := 'synology.com'): PasswordGen(domain=dom,
-        lenmin=8, n_of_m_groups=(2, 'uc', 'lc', 'num')),
+        pwlen=8, n_of_m_groups=(2, 'uc', 'lc', 'num')),
     (dom := 'tiaa-cref.org'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=20, specialchars='', special=(0, 0)),
+        pwlen=(6, 20), specialchars='', special=(0, 0)),
     (dom := 'ticketmaster.com'): PasswordGen(domain=dom,
-        lenmin=8, letters=1, num=1),
+        pwlen=(12, 65), letters=1, num=1, ruleschecked='2026-08-31'),  # maybe more than 65
     (dom := 'topcoder.com'): PasswordGen(domain=dom,
-        lenmin=8, letters=1, n_of_m_groups=(1, 'num', 'spec')),
+        pwlen=8, letters=1, n_of_m_groups=(1, 'num', 'spec')),
     (dom := 'trainingmagnetwork.com'): PasswordGen(domain=dom,
-        lenmin=8),
+        pwlen=8),
     (dom := 'tranehome.com'): PasswordGen(domain=dom,
         uc=1, lc=1, num=1),
     (dom := 'transunion.com'): PasswordGen(domain=dom,
-        lenmin=12, lenmax=64),
+        pwlen=(12, 64)),
     (dom := 'tvguide.com'): PasswordGen(domain=dom,
-        lenmin=6),
+        pwlen=6),
     (dom := 'upmc.com'): PasswordGen(domain=dom,  # HealthTrak
-        lenmin=8, uc=1, lc=1, num=1, special=1),
+        pwlen=8, uc=1, lc=1, num=1, special=1),
     (dom := 'upmchealthplan.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=14, uc=1, lc=1, num=1),
+        pwlen=(8, 14), uc=1, lc=1, num=1),
     (dom := 'ups.com'): PasswordGen(domain=dom,  # My Choice
-        lenmin=12, lenmax=26, uc=1, lc=1, num=1,
+        pwlen=(12, 26), uc=1, lc=1, num=1,
         specialchars='!@#$%*', special=1),
     (dom := 'vectorsecurity.com'): PasswordGen(domain=dom,
-        lenmin=6, uc=1, n_of_m_groups=(1, 'num', 'spec')),
+        pwlen=6, uc=1, n_of_m_groups=(1, 'num', 'spec')),
     (dom := 'verizonwireless.com'): PasswordGen(domain=dom,
-        lenmin=8, lenmax=20, letters=1, num=1),
+        pwlen=(8, 20), letters=1, num=1),
     (dom := 'vitalant.com'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1, special=1),
+        pwlen=8, uc=1, lc=1, num=1, special=1),
     (dom := 'warwickhotels.com'): PasswordGen(domain=dom,
-        lenmin=6, lenmax=17, num=1),
+        pwlen=(6, 17), num=1),
     (dom := 'washingtonpost.com'): PasswordGen(domain=dom,
-        lenmin=8, specialchars='!"#$%&\'()*+,-./:;=?@[\\]^_{}~', special=1),
+        pwlen=8, specialchars='!"#$%&\'()*+,-./:;=?@[\\]^_{}~', special=1),
     (dom := 'wdc.com'): PasswordGen(domain=dom,  # Western Digital support
-        lenmin=8, lenmax=999, letters=1, num=1, history=3),
+        pwlen=(8, 999), letters=1, num=1, history=3),
     (dom := 'wicklespickles.com'): PasswordGen(domain=dom,
-        lenmin=12),
+        pwlen=12),
     (dom := 'zoom.us'): PasswordGen(domain=dom,
-        lenmin=8, uc=1, lc=1, num=1),
+        pwlen=8, uc=1, lc=1, num=1),
     }  # end pswdGens
 
 #for (domain, ruleset) in pswdGens.items():
@@ -871,17 +896,17 @@ def selftest(args):
 
     try:
         pswdGens['testbadspecialchars'] = PasswordGen(
-            lenmin=6, lenmax=10, specialchars='$x*3-')
+            pwlen=(6, 10), specialchars='$x*3-')
     except UserError:
         pass
 
     pswdGens['testbadrun'] = PasswordGen(
-        lenmin=6, lenmax=10, maxrun=0)
+        pwlen=(6, 10), maxrun=0)
     pswdGens['testbad1stchar'] = PasswordGen(  # my Social Security
-        lenmin=8, lenmax=64, specialchars='!@#$%^&*',
+        pwlen=(8, 64), specialchars='!@#$%^&*',
         firstchar=('uc', 'lc', 'num', 'junk'))
     pswdGens['short3of4'] = PasswordGen(
-        lenmin=3, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec'))
+        pwlen=3, n_of_m_groups=(3, 'uc', 'lc', 'num', 'spec'))
     pswdGens['confusable'] = PasswordGen(
         allowconfusables=False, confusablechars='Il1|!O0',
         firstchar=('ltrs','num','spec'),
